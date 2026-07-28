@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "node --test",
     "test:watch": "node --test --watch",
+    "loadtest": "node scripts/simulate-load.js",
     "postinstall": "node scripts/copy-ocr-assets.js"
   },
   "dependencies": {
