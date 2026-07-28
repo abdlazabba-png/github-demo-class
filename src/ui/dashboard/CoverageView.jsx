@@ -1,18 +1,22 @@
-import { useEffect, useState } from 'react';
-import { LGAS, WARDS, POLLING_UNITS } from '../../referenceData/gombe.js';
+import { useEffect, useMemo, useState } from 'react';
+import { getStateDataset } from '../../referenceData/states/index.js';
 
 // CLAUDE.md, non-negotiable: "Never display a live 'who's winning' number
 // or leaderboard. Any aggregate view must be framed as 'unofficial, N of N
 // polling units reporting' — never as a result." This view only ever
 // counts *whether a PU has reported*, never what was reported. Nothing
 // here reads partyVotes, and nothing should ever be added that does.
-export default function CoverageView({ server, partyClientId, refreshToken }) {
+export default function CoverageView({ server, partyClientId, stateCode, refreshToken }) {
   const [reportedPuCodes, setReportedPuCodes] = useState(new Set());
 
   useEffect(() => {
-    const submissions = server.getSubmissionsForClient(partyClientId);
+    const submissions = server.getSubmissionsForClient(partyClientId, stateCode);
     setReportedPuCodes(new Set(submissions.map((s) => s.payload.puCode)));
-  }, [server, partyClientId, refreshToken]);
+  }, [server, partyClientId, stateCode, refreshToken]);
+
+  // The "N of N" denominator is always this one state's own PU count —
+  // mixing another state's total in would misrepresent both (Phase 4).
+  const { LGAS, WARDS, POLLING_UNITS } = useMemo(() => getStateDataset(stateCode), [stateCode]);
 
   const totalPUs = POLLING_UNITS.length;
   const reportedCount = reportedPuCodes.size;

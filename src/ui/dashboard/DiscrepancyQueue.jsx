@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 
-export default function DiscrepancyQueue({ server, partyClientId, refreshToken }) {
+export default function DiscrepancyQueue({ server, partyClientId, stateCode, refreshToken }) {
   const [discrepancies, setDiscrepancies] = useState([]);
 
   useEffect(() => {
-    setDiscrepancies(server.getDiscrepanciesForClient(partyClientId));
-  }, [server, partyClientId, refreshToken]);
+    setDiscrepancies(server.getDiscrepanciesForClient(partyClientId, stateCode));
+  }, [server, partyClientId, stateCode, refreshToken]);
 
   return (
     <section className="dashboard-view discrepancy-queue">

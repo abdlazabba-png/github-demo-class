@@ -64,12 +64,12 @@ function EvidenceRow({ submission }) {
   );
 }
 
-export default function EvidenceView({ server, partyClientId, refreshToken }) {
+export default function EvidenceView({ server, partyClientId, stateCode, refreshToken }) {
   const [submissions, setSubmissions] = useState([]);
 
   useEffect(() => {
-    setSubmissions(server.getSubmissionsForClient(partyClientId));
-  }, [server, partyClientId, refreshToken]);
+    setSubmissions(server.getSubmissionsForClient(partyClientId, stateCode));
+  }, [server, partyClientId, stateCode, refreshToken]);
 
   return (
     <section className="dashboard-view evidence-view">

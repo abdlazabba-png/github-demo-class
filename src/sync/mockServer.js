@@ -1,5 +1,5 @@
 import { validateSubmission } from '../validation/validate.js';
-import { findPollingUnit } from '../referenceData/gombe.js';
+import { findPollingUnitInState } from '../referenceData/states/index.js';
 
 // Stand-in for the AppSync/DynamoDB ingestion endpoint (CLAUDE.md: "mock
 // backend first" for Phase 1). The one property that matters for the
@@ -22,6 +22,14 @@ import { findPollingUnit } from '../referenceData/gombe.js';
 // enforce this with resolver-level auth rules; here it's enforced by simply
 // not giving the dashboard's data layer any function capable of returning
 // more than one party client's data at once.
+//
+// Phase 4 adds a second scoping dimension, stateCode, now that reference
+// data is per-state (src/referenceData/states/). Every dashboard query
+// takes both partyClientId and stateCode: a party client's "N of N
+// reporting" number is only meaningful against one state's own PU count,
+// and PU codes are namespaced by convention (GM-…, AD-…) rather than
+// guaranteed globally unique, so duplicate detection and PU lookups are
+// scoped by state explicitly rather than assumed.
 export function createMockServer({ latencyMs = 0 } = {}) {
   const store = new Map(); // id -> record
   const auditLog = []; // append-only; entries are never mutated or removed
@@ -34,16 +42,17 @@ export function createMockServer({ latencyMs = 0 } = {}) {
       throw new Error('simulated network failure');
     }
     if (!store.has(record.id)) {
-      const { partyClientId, puCode, partyVotes, ocrVotes, agentId } = record.payload;
-      // Duplicate detection is scoped to the same party client on purpose:
-      // two different party clients independently reporting the same PU is
-      // the expected, normal case (each runs its own monitoring operation),
-      // not a duplicate. Only a second submission *within one client's own
-      // operation* is a genuine duplicate worth flagging.
+      const { partyClientId, stateCode, puCode, partyVotes, ocrVotes, agentId } = record.payload;
+      // Duplicate detection is scoped to the same party client AND the
+      // same state on purpose: two different party clients (or the same
+      // client operating in two different states) independently reporting
+      // "puCode GM-A/W1/001" is the expected, normal case, not a
+      // duplicate. Only a second submission within one client's own
+      // operation in one state is a genuine duplicate worth flagging.
       const priorPuCodes = Array.from(store.values())
-        .filter((r) => r.payload.partyClientId === partyClientId)
+        .filter((r) => r.payload.partyClientId === partyClientId && r.payload.stateCode === stateCode)
         .map((r) => r.payload.puCode);
-      const pu = findPollingUnit(puCode);
+      const pu = findPollingUnitInState(stateCode, puCode);
       const validation = validateSubmission({
         partyVotes,
         ocrVotes,
@@ -56,6 +65,7 @@ export function createMockServer({ latencyMs = 0 } = {}) {
       auditLog.push({
         id: record.id,
         partyClientId,
+        stateCode,
         puCode,
         agentId,
         receivedAt,
@@ -80,22 +90,26 @@ export function createMockServer({ latencyMs = 0 } = {}) {
         .sort((a, b) => a.receivedAt - b.receivedAt),
     count: () => store.size,
 
-    // Party-dashboard-facing views — every one requires a partyClientId and
-    // can only ever return that client's own data.
-    getSubmissionsForClient: (partyClientId) =>
+    // Party-dashboard-facing views — every one requires both a
+    // partyClientId and a stateCode, and can only ever return that
+    // client's own data for that one state.
+    getSubmissionsForClient: (partyClientId, stateCode) =>
       Array.from(store.values())
-        .filter((r) => r.payload.partyClientId === partyClientId)
+        .filter((r) => r.payload.partyClientId === partyClientId && r.payload.stateCode === stateCode)
         .sort((a, b) => a.receivedAt - b.receivedAt),
-    getDiscrepanciesForClient: (partyClientId) =>
+    getDiscrepanciesForClient: (partyClientId, stateCode) =>
       Array.from(store.values())
         .filter(
           (r) =>
             r.payload.partyClientId === partyClientId &&
+            r.payload.stateCode === stateCode &&
             (r.validation.overallSeverity === 'warning' || r.validation.overallSeverity === 'error')
         )
         .sort((a, b) => a.receivedAt - b.receivedAt),
-    getAuditLogForClient: (partyClientId) =>
-      auditLog.filter((entry) => entry.partyClientId === partyClientId).sort((a, b) => a.receivedAt - b.receivedAt),
+    getAuditLogForClient: (partyClientId, stateCode) =>
+      auditLog
+        .filter((entry) => entry.partyClientId === partyClientId && entry.stateCode === stateCode)
+        .sort((a, b) => a.receivedAt - b.receivedAt),
 
     failNextRequest(n = 1) {
       failNext = n;

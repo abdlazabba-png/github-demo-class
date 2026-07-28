@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockServer } from '../src/sync/mockServer.js';
-import { POLLING_UNITS } from '../src/referenceData/gombe.js';
+import { POLLING_UNITS } from '../src/referenceData/states/gombe.js';
 import { simulateConcurrentAgents } from './helpers/simulateAgents.js';
 
 function lgaCodeFor(pu) {
@@ -13,6 +13,7 @@ function payloadFor({ agentIndex, submissionIndex, partyClientId, pu }) {
   return {
     agentId: `agent-${agentIndex}`,
     partyClientId,
+    stateCode: 'GM',
     puCode: pu.puCode,
     wardCode: pu.wardCode,
     lgaCode: lgaCodeFor(pu),
@@ -29,7 +30,7 @@ function payloadFor({ agentIndex, submissionIndex, partyClientId, pu }) {
 // concurrent submission" — as a simulated election, per the phase's own
 // wording, since there's no real backend yet. These are correctness
 // properties under concurrency, not throughput numbers (see
-// scripts/run-load-test.js for a runnable report with timing).
+// scripts/simulate-load.js for a runnable report with timing).
 describe('Phase 3: concurrent submission load (simulated election)', () => {
   it('a small agent group submitting concurrently loses nothing and creates no duplicate rows', async () => {
     const server = createMockServer({ latencyMs: 15 });
@@ -75,16 +76,16 @@ describe('Phase 3: concurrent submission load (simulated election)', () => {
       },
     });
 
-    const alpha = server.getSubmissionsForClient('party-alpha');
-    const beta = server.getSubmissionsForClient('party-beta');
+    const alpha = server.getSubmissionsForClient('party-alpha', 'GM');
+    const beta = server.getSubmissionsForClient('party-beta', 'GM');
 
     assert.strictEqual(alpha.length + beta.length, AGENT_COUNT * PER_AGENT);
     assert.ok(alpha.every((r) => r.payload.partyClientId === 'party-alpha'));
     assert.ok(beta.every((r) => r.payload.partyClientId === 'party-beta'));
 
     // Audit logs must sum the same way and never cross over either.
-    const alphaLog = server.getAuditLogForClient('party-alpha');
-    const betaLog = server.getAuditLogForClient('party-beta');
+    const alphaLog = server.getAuditLogForClient('party-alpha', 'GM');
+    const betaLog = server.getAuditLogForClient('party-beta', 'GM');
     assert.strictEqual(alphaLog.length, alpha.length);
     assert.strictEqual(betaLog.length, beta.length);
   });
@@ -106,7 +107,7 @@ describe('Phase 3: concurrent submission load (simulated election)', () => {
     // cause two submissions to collapse into one, or one to vanish.
     assert.strictEqual(server.count(), RACER_COUNT);
 
-    const submissions = server.getSubmissionsForClient('party-alpha');
+    const submissions = server.getSubmissionsForClient('party-alpha', 'GM');
     const clean = submissions.filter((s) => s.validation.overallSeverity === 'ok');
     const flaggedDuplicate = submissions.filter(
       (s) => s.validation.checks.find((c) => c.type === 'duplicate').severity === 'error'

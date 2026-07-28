@@ -10,7 +10,7 @@ import {
   findPollingUnit,
   findWard,
   findLga,
-} from '../src/referenceData/gombe.js';
+} from '../src/referenceData/states/gombe.js';
 
 describe('reference data hierarchy', () => {
   it('every ward points at a real LGA', () => {

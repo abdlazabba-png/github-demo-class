@@ -6,9 +6,16 @@
 // dataset has to come from an authoritative state/INEC source — this file
 // is a small synthetic stand-in with deliberately generic names ("Demo LGA
 // A"...) so nobody mistakes it for the genuine article. Swap this file for
-// the real per-state dataset before any pilot or real submission; the
-// shape (LGAS/WARDS/POLLING_UNITS + the lookup helpers below) is what the
-// rest of the app depends on, not the specific rows.
+// the real per-state dataset before any pilot or real submission.
+//
+// Phase 4 (CLAUDE.md: "parameterize the PU/Ward/LGA reference data per
+// state instead of hardcoding Gombe") is what moved this file under
+// states/ — every file in this directory must export the same shape
+// (LGAS/WARDS/POLLING_UNITS + the lookup helpers below), because
+// ../index.js's registry treats them as interchangeable per-state
+// datasets. Nothing outside referenceData/states/ should import a
+// specific state file directly; go through ../index.js instead so adding
+// a state never means hunting down scattered imports again.
 
 export const REFERENCE_DATA_VERSION = 'sample-2026-07-28';
 

@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockServer } from '../src/sync/mockServer.js';
-import { findPollingUnit } from '../src/referenceData/gombe.js';
+import { findPollingUnitInState } from '../src/referenceData/states/index.js';
 
-// GM-A/W1/001 has 412 registered voters (src/referenceData/gombe.js).
-const PU = findPollingUnit('GM-A/W1/001');
+// GM-A/W1/001 has 412 registered voters (src/referenceData/states/gombe.js).
+const PU = findPollingUnitInState('GM', 'GM-A/W1/001');
 
 function makeRecord(id, overrides = {}) {
   return {
@@ -12,6 +12,7 @@ function makeRecord(id, overrides = {}) {
     submissionHash: `hash-${id}`,
     payload: {
       agentId: 'agent-1',
+      stateCode: 'GM',
       puCode: PU.puCode,
       wardCode: PU.wardCode,
       lgaCode: 'GM-A',

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 
-export default function AuditLogView({ server, partyClientId, refreshToken }) {
+export default function AuditLogView({ server, partyClientId, stateCode, refreshToken }) {
   const [entries, setEntries] = useState([]);
 
   useEffect(() => {
-    setEntries(server.getAuditLogForClient(partyClientId));
-  }, [server, partyClientId, refreshToken]);
+    setEntries(server.getAuditLogForClient(partyClientId, stateCode));
+  }, [server, partyClientId, stateCode, refreshToken]);
 
   return (
     <section className="dashboard-view audit-log-view">

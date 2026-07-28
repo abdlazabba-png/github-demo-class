@@ -10,24 +10,28 @@
 // Run with: npm run loadtest
 import 'fake-indexeddb/auto';
 import { createMockServer } from '../src/sync/mockServer.js';
-import { POLLING_UNITS } from '../src/referenceData/gombe.js';
+import { statesList, getStateDataset } from '../src/referenceData/states/index.js';
 import { PARTY_CLIENTS } from '../src/referenceData/partyClients.js';
 import { simulateConcurrentAgents } from '../tests/helpers/simulateAgents.js';
 
 const AGENT_COUNT = 50;
 const SUBMISSIONS_PER_AGENT = 5;
 const SIMULATED_LATENCY_MS = 60; // rough stand-in for a real mobile network round trip
+const STATE_CODES = statesList().map((s) => s.code); // spreads agents across every seeded state (Phase 4)
 
 function lgaCodeFor(pu) {
   return pu.wardCode.split('/')[0];
 }
 
 function buildPayload(agentIndex, submissionIndex) {
+  const stateCode = STATE_CODES[agentIndex % STATE_CODES.length];
+  const { POLLING_UNITS } = getStateDataset(stateCode);
   const pu = POLLING_UNITS[(agentIndex + submissionIndex) % POLLING_UNITS.length];
   const partyClientId = PARTY_CLIENTS[agentIndex % PARTY_CLIENTS.length].id;
   return {
     agentId: `agent-${agentIndex}`,
     partyClientId,
+    stateCode,
     puCode: pu.puCode,
     wardCode: pu.wardCode,
     lgaCode: lgaCodeFor(pu),
@@ -64,7 +68,9 @@ async function main() {
 
   let discrepancyCount = 0;
   for (const client of PARTY_CLIENTS) {
-    discrepancyCount += server.getDiscrepanciesForClient(client.id).length;
+    for (const stateCode of STATE_CODES) {
+      discrepancyCount += server.getDiscrepanciesForClient(client.id, stateCode).length;
+    }
   }
 
   console.log('--- Results ---');

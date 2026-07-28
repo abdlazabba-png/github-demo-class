@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { savePhoto } from '../sync/photoStore.js';
 import { runOcr } from '../ocr/runOcr.js';
 import { getGps } from '../geo/getGps.js';
-import { lgasList, wardsForLga, pollingUnitsForWard, findPollingUnit } from '../referenceData/gombe.js';
+import {
+  statesList,
+  lgasListForState,
+  wardsForLgaInState,
+  pollingUnitsForWardInState,
+  findPollingUnitInState,
+} from '../referenceData/states/index.js';
 import { PARTY_CLIENTS } from '../referenceData/partyClients.js';
 import { checkOcrMismatch, checkPlausibility, worstSeverity } from '../validation/validate.js';
 
@@ -19,6 +25,9 @@ export default function CaptureForm({ onCapture }) {
   // operation) rather than let the agent pick — this selector stands in
   // for that provisioning step until real auth exists.
   const [partyClientId, setPartyClientId] = useState(PARTY_CLIENTS[0].id);
+  // Same provisioning logic as partyClientId: a real device is set up for
+  // one state's pilot, not left to pick from every state in the country.
+  const [stateCode, setStateCode] = useState(statesList()[0].code);
   const [lgaCode, setLgaCode] = useState('');
   const [wardCode, setWardCode] = useState('');
   const [puCode, setPuCode] = useState('');
@@ -33,9 +42,15 @@ export default function CaptureForm({ onCapture }) {
   const [lastCaptured, setLastCaptured] = useState(null);
   const [overrideAck, setOverrideAck] = useState(false);
 
-  const wards = useMemo(() => (lgaCode ? wardsForLga(lgaCode) : []), [lgaCode]);
-  const pollingUnits = useMemo(() => (wardCode ? pollingUnitsForWard(wardCode) : []), [wardCode]);
-  const selectedPu = useMemo(() => (puCode ? findPollingUnit(puCode) : null), [puCode]);
+  const wards = useMemo(() => (lgaCode ? wardsForLgaInState(stateCode, lgaCode) : []), [stateCode, lgaCode]);
+  const pollingUnits = useMemo(
+    () => (wardCode ? pollingUnitsForWardInState(stateCode, wardCode) : []),
+    [stateCode, wardCode]
+  );
+  const selectedPu = useMemo(
+    () => (puCode ? findPollingUnitInState(stateCode, puCode) : null),
+    [stateCode, puCode]
+  );
 
   const partyVotes = useMemo(
     () => Object.fromEntries(PARTIES.map((p) => [p, Number(votes[p]) || 0])),
@@ -68,6 +83,13 @@ export default function CaptureForm({ onCapture }) {
   useEffect(() => () => {
     if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
   }, [photoPreviewUrl]);
+
+  const handleStateChange = (e) => {
+    setStateCode(e.target.value);
+    setLgaCode('');
+    setWardCode('');
+    setPuCode('');
+  };
 
   const handleLgaChange = (e) => {
     setLgaCode(e.target.value);
@@ -133,6 +155,7 @@ export default function CaptureForm({ onCapture }) {
       const payload = {
         agentId,
         partyClientId,
+        stateCode,
         puCode,
         wardCode,
         lgaCode,
@@ -175,6 +198,16 @@ export default function CaptureForm({ onCapture }) {
             ))}
           </select>
         </label>
+        <label>
+          State
+          <select value={stateCode} onChange={handleStateChange}>
+            {statesList().map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="form-row">
@@ -184,7 +217,7 @@ export default function CaptureForm({ onCapture }) {
             <option value="" disabled>
               Select LGA…
             </option>
-            {lgasList().map((l) => (
+            {lgasListForState(stateCode).map((l) => (
               <option key={l.lgaCode} value={l.lgaCode}>
                 {l.lgaName}
               </option>
