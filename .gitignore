@@ -3,3 +3,6 @@ dist/
 dev-dist/
 .DS_Store
 *.local
+
+# Regenerated from node_modules by scripts/copy-ocr-assets.js (postinstall)
+public/tesseract/

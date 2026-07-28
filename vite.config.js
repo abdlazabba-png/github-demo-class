@@ -12,6 +12,12 @@ export default defineConfig({
         // reasoning as usd-frontline's service-worker.js: caching live
         // submission/result endpoints would serve stale data.
         navigateFallbackDenylist: [/^\/api\//],
+        // Defaults only cover a handful of extensions and cap files at
+        // 2MiB — too small for the self-hosted OCR assets (WASM core +
+        // gzipped traineddata), which is the whole point of bundling them:
+        // capture (including OCR pre-fill) must work with zero network.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,json,wasm,gz}'],
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
       manifest: {
         name: 'Election Result Verification Platform',
