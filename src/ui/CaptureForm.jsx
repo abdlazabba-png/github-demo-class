@@ -3,6 +3,7 @@ import { savePhoto } from '../sync/photoStore.js';
 import { runOcr } from '../ocr/runOcr.js';
 import { getGps } from '../geo/getGps.js';
 import { lgasList, wardsForLga, pollingUnitsForWard, findPollingUnit } from '../referenceData/gombe.js';
+import { PARTY_CLIENTS } from '../referenceData/partyClients.js';
 import { checkOcrMismatch, checkPlausibility, worstSeverity } from '../validation/validate.js';
 
 const PARTIES = ['APC', 'PDP', 'LP', 'NNPP'];
@@ -13,6 +14,11 @@ function emptyVotes() {
 
 export default function CaptureForm({ onCapture }) {
   const [agentId, setAgentId] = useState('agent-demo');
+  // A real deployment would provision each agent's device for exactly one
+  // party client (that's who's paying for and running this monitoring
+  // operation) rather than let the agent pick — this selector stands in
+  // for that provisioning step until real auth exists.
+  const [partyClientId, setPartyClientId] = useState(PARTY_CLIENTS[0].id);
   const [lgaCode, setLgaCode] = useState('');
   const [wardCode, setWardCode] = useState('');
   const [puCode, setPuCode] = useState('');
@@ -126,6 +132,7 @@ export default function CaptureForm({ onCapture }) {
       const gps = await getGps(); // fresh fix at submit time; resolves to null if unavailable, never blocks
       const payload = {
         agentId,
+        partyClientId,
         puCode,
         wardCode,
         lgaCode,
@@ -157,6 +164,16 @@ export default function CaptureForm({ onCapture }) {
         <label>
           Agent ID
           <input value={agentId} onChange={(e) => setAgentId(e.target.value)} />
+        </label>
+        <label>
+          Party Client
+          <select value={partyClientId} onChange={(e) => setPartyClientId(e.target.value)}>
+            {PARTY_CLIENTS.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
 

@@ -260,3 +260,117 @@ td {
   background: rgba(239, 68, 68, 0.2);
   color: var(--danger);
 }
+
+.app-view-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.app-view-toggle button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.app-view-toggle button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.dashboard-header,
+.dashboard-view {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.dashboard-header label {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.dashboard-header select {
+  width: auto;
+}
+
+.dashboard-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.dashboard-tabs button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.dashboard-tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.dashboard-view h3 {
+  margin-top: 0;
+}
+
+.coverage-headline {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.evidence-list,
+.discrepancy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.evidence-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.evidence-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.evidence-row img {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.discrepancy-item {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px;
+}
+.discrepancy-item.severity-warning {
+  border-left-color: var(--warn);
+}
+.discrepancy-item.severity-error {
+  border-left-color: var(--danger);
+}
+.discrepancy-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.discrepancy-reasons {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
