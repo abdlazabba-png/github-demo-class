@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { savePhoto, getPhotoObjectUrl } from '../sync/photoStore.js';
+import { savePhoto } from '../sync/photoStore.js';
 import { runOcr } from '../ocr/runOcr.js';
 import { getGps } from '../geo/getGps.js';
 import { lgasList, wardsForLga, pollingUnitsForWard, findPollingUnit } from '../referenceData/gombe.js';
+import { checkOcrMismatch, checkPlausibility, worstSeverity } from '../validation/validate.js';
 
 const PARTIES = ['APC', 'PDP', 'LP', 'NNPP'];
 
@@ -24,10 +25,37 @@ export default function CaptureForm({ onCapture }) {
   const [votes, setVotes] = useState(emptyVotes());
   const [submitting, setSubmitting] = useState(false);
   const [lastCaptured, setLastCaptured] = useState(null);
+  const [overrideAck, setOverrideAck] = useState(false);
 
   const wards = useMemo(() => (lgaCode ? wardsForLga(lgaCode) : []), [lgaCode]);
   const pollingUnits = useMemo(() => (wardCode ? pollingUnitsForWard(wardCode) : []), [wardCode]);
   const selectedPu = useMemo(() => (puCode ? findPollingUnit(puCode) : null), [puCode]);
+
+  const partyVotes = useMemo(
+    () => Object.fromEntries(PARTIES.map((p) => [p, Number(votes[p]) || 0])),
+    [votes]
+  );
+
+  // Duplicate-submission detection isn't run here: it needs visibility
+  // across all submissions, which an offline agent's device doesn't
+  // reliably have. That check runs server-side in mockServer.js and feeds
+  // the (future) discrepancy queue instead.
+  const validationChecks = useMemo(() => {
+    const ocrMismatch = checkOcrMismatch(partyVotes, ocrResult?.suggestedVotes || {});
+    const plausibility = selectedPu
+      ? checkPlausibility(partyVotes, selectedPu.registeredVoters)
+      : { type: 'plausibility', severity: 'unknown', message: 'Select a polling unit to check plausibility.' };
+    return [ocrMismatch, plausibility];
+  }, [partyVotes, ocrResult, selectedPu]);
+  const validationSeverity = worstSeverity(validationChecks);
+  const requiresOverride = validationSeverity === 'error';
+
+  // Force a fresh acknowledgment any time the figures or PU change, so a
+  // stale checkbox from an earlier (different) warning can't wave through
+  // whatever the agent has since edited.
+  useEffect(() => {
+    setOverrideAck(false);
+  }, [partyVotes, puCode, ocrResult]);
 
   // Revoke the thumbnail's object URL when it's replaced/unmounted so we
   // don't leak blob URLs across repeated captures in a long agent session.
@@ -87,14 +115,14 @@ export default function CaptureForm({ onCapture }) {
 
   const updateVote = (party, value) => setVotes((v) => ({ ...v, [party]: value }));
 
-  const canSubmit = Boolean(puCode) && Boolean(photoId) && !submitting;
+  const canSubmit =
+    Boolean(puCode) && Boolean(photoId) && !submitting && (!requiresOverride || overrideAck);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const partyVotes = Object.fromEntries(PARTIES.map((p) => [p, Number(votes[p]) || 0]));
       const gps = await getGps(); // fresh fix at submit time; resolves to null if unavailable, never blocks
       const payload = {
         agentId,
@@ -219,6 +247,21 @@ export default function CaptureForm({ onCapture }) {
           </label>
         ))}
       </fieldset>
+
+      <ul className="validation-checks">
+        {validationChecks.map((check) => (
+          <li key={check.type} className={`check check-${check.severity}`}>
+            {check.message}
+          </li>
+        ))}
+      </ul>
+
+      {requiresOverride && (
+        <label className="override-ack">
+          <input type="checkbox" checked={overrideAck} onChange={(e) => setOverrideAck(e.target.checked)} />
+          I've checked this against the paper sheet and confirm it's correct as entered.
+        </label>
+      )}
 
       <button type="submit" disabled={!canSubmit}>
         {submitting ? 'Saving…' : 'Capture (works offline)'}

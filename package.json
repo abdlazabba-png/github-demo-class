@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/syncQueue.test.js tests/referenceData.test.js tests/photoStore.test.js tests/getGps.test.js",
-    "test:watch": "node --test --watch tests/syncQueue.test.js tests/referenceData.test.js tests/photoStore.test.js tests/getGps.test.js",
+    "test": "node --test",
+    "test:watch": "node --test --watch",
     "postinstall": "node scripts/copy-ocr-assets.js"
   },
   "dependencies": {
