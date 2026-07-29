@@ -25,7 +25,13 @@
   "devDependencies": {
     "@aws-amplify/backend": "^1.23.0",
     "@aws-amplify/backend-cli": "^1.8.3",
+    "@aws-sdk/client-dynamodb": "^3.1097.0",
+    "@aws-sdk/lib-dynamodb": "^3.1097.0",
+    "@types/aws-lambda": "^8.10.162",
+    "@types/node": "^26.1.2",
     "@vitejs/plugin-react": "^4.3.4",
+    "aws-cdk-lib": "^2.262.2",
+    "aws-lambda": "^1.0.7",
     "fake-indexeddb": "^6.0.0",
     "typescript": "^5.9.3",
     "vite": "^4.5.5",

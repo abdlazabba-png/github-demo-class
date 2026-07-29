@@ -30,4 +30,16 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    watch: {
+      // `npx ampx sandbox` writes/renames files rapidly under .amplify/
+      // during deploys; on Windows, Vite's watcher holding a handle on
+      // those files causes CDK's build-then-rename step to fail with
+      // EPERM. Confirmed live: stopping the dev server was what fixed a
+      // reproducible deploy failure here. Excluding the folder lets both
+      // run at the same time without the dev server needing to be
+      // stopped for every redeploy.
+      ignored: ['**/.amplify/**'],
+    },
+  },
 });

@@ -78,6 +78,10 @@ export function checkPlausibility(partyVotes, registeredVoters) {
 // submissions (same or different agent/device) reporting the same PU,
 // which is a data-integrity concern for review, not something to silently
 // merge or overwrite (CLAUDE.md: edits go through a logged reviewer flow).
+/**
+ * @param {string} puCode
+ * @param {string[]} [priorPuCodes]
+ */
 export function checkDuplicate(puCode, priorPuCodes = []) {
   const priorCount = priorPuCodes.filter((code) => code === puCode).length;
   if (priorCount === 0) {
@@ -98,6 +102,15 @@ export function worstSeverity(checks) {
   );
 }
 
+/**
+ * @param {{
+ *   partyVotes: Record<string, number>,
+ *   ocrVotes: Record<string, number>,
+ *   registeredVoters: number | null,
+ *   puCode: string,
+ *   priorPuCodes?: string[],
+ * }} input
+ */
 export function validateSubmission({ partyVotes, ocrVotes, registeredVoters, puCode, priorPuCodes = [] }) {
   const checks = [
     checkOcrMismatch(partyVotes, ocrVotes),
