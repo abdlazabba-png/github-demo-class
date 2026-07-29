@@ -10,6 +10,8 @@
     "test": "node --test",
     "test:watch": "node --test --watch",
     "loadtest": "node scripts/simulate-load.js",
+    "amplify:sandbox": "ampx sandbox",
+    "amplify:typecheck": "tsc --noEmit -p amplify/tsconfig.json",
     "postinstall": "node scripts/copy-ocr-assets.js"
   },
   "dependencies": {
@@ -19,8 +21,11 @@
     "tesseract.js": "^5.1.1"
   },
   "devDependencies": {
+    "@aws-amplify/backend": "^1.23.0",
+    "@aws-amplify/backend-cli": "^1.8.3",
     "@vitejs/plugin-react": "^4.3.4",
     "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.9.3",
     "vite": "^4.5.5",
     "vite-plugin-pwa": "^0.19.8"
   }

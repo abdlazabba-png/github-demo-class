@@ -6,3 +6,10 @@ dev-dist/
 
 # Regenerated from node_modules by scripts/copy-ocr-assets.js (postinstall)
 public/tesseract/
+
+# Amplify Gen 2: local sandbox state and generated, environment-specific
+# outputs (resource ids, endpoints) — created by `npx ampx sandbox`, never
+# committed. amplify/backend.ts etc. are the source of truth; these are
+# build/deploy artifacts derived from it.
+.amplify/
+amplify_outputs*.json
