@@ -54,12 +54,19 @@ function EvidenceRow({ submission }) {
 
 export default function EvidenceView({ server, partyClientId, stateCode, refreshToken }) {
   const [submissions, setSubmissions] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    server.getSubmissionsForClient(partyClientId, stateCode).then((subs) => {
-      if (!cancelled) setSubmissions(subs);
-    });
+    setError(null);
+    server
+      .getSubmissionsForClient(partyClientId, stateCode)
+      .then((subs) => {
+        if (!cancelled) setSubmissions(subs);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err?.message || err));
+      });
     return () => {
       cancelled = true;
     };
@@ -68,7 +75,10 @@ export default function EvidenceView({ server, partyClientId, stateCode, refresh
   return (
     <section className="dashboard-view evidence-view">
       <h3>Evidence</h3>
-      {submissions.length === 0 && <p className="hint">No submissions yet for this party client.</p>}
+      {error && <p className="hint warn">Couldn't load submissions: {error}</p>}
+      {submissions.length === 0 && !error && (
+        <p className="hint">No submissions yet for this party client.</p>
+      )}
       <ul className="evidence-list">
         {submissions.map((s) => (
           <EvidenceRow key={s.id} submission={s} />

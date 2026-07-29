@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react';
 
 export default function AuditLogView({ server, partyClientId, stateCode, refreshToken }) {
   const [entries, setEntries] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    server.getAuditLogForClient(partyClientId, stateCode).then((result) => {
-      if (!cancelled) setEntries(result);
-    });
+    setError(null);
+    server
+      .getAuditLogForClient(partyClientId, stateCode)
+      .then((result) => {
+        if (!cancelled) setEntries(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err?.message || err));
+      });
     return () => {
       cancelled = true;
     };
@@ -21,7 +28,8 @@ export default function AuditLogView({ server, partyClientId, stateCode, refresh
         edited or removed. A future reviewer/edit flow (CLAUDE.md: edits are never silent) will
         log its actions here too.
       </p>
-      {entries.length === 0 && <p className="hint">No activity yet.</p>}
+      {error && <p className="hint warn">Couldn't load audit log: {error}</p>}
+      {entries.length === 0 && !error && <p className="hint">No activity yet.</p>}
       <table>
         <thead>
           <tr>

@@ -8,12 +8,19 @@ import { getStateDataset } from '../../referenceData/states/index.js';
 // here reads partyVotes, and nothing should ever be added that does.
 export default function CoverageView({ server, partyClientId, stateCode, refreshToken }) {
   const [reportedPuCodes, setReportedPuCodes] = useState(new Set());
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    server.getSubmissionsForClient(partyClientId, stateCode).then((submissions) => {
-      if (!cancelled) setReportedPuCodes(new Set(submissions.map((s) => s.payload.puCode)));
-    });
+    setError(null);
+    server
+      .getSubmissionsForClient(partyClientId, stateCode)
+      .then((submissions) => {
+        if (!cancelled) setReportedPuCodes(new Set(submissions.map((s) => s.payload.puCode)));
+      })
+      .catch((err) => {
+        if (!cancelled) setError(String(err?.message || err));
+      });
     return () => {
       cancelled = true;
     };
@@ -42,6 +49,7 @@ export default function CoverageView({ server, partyClientId, stateCode, refresh
       <p className="hint">
         Coverage only — not a result. This never shows vote totals, and there is no leaderboard.
       </p>
+      {error && <p className="hint warn">Couldn't load coverage: {error}</p>}
       <table>
         <thead>
           <tr>

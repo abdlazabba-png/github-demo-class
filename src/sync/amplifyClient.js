@@ -110,9 +110,14 @@ export async function createSubmission(record) {
 }
 
 export async function getSubmissionsForClient(partyClientId, stateCode) {
+  // partyClientId is the index's partition key (plain value); stateCode is
+  // the sort key, which Amplify's generated query expects as a condition
+  // object ({ eq: ... }) rather than a raw value — confirmed live: passing
+  // a plain string here fails with "Variable 'stateCode' has an invalid
+  // value".
   const { data, errors } = await client.models.Submission.listByPartyClientAndState({
     partyClientId,
-    stateCode,
+    stateCode: { eq: stateCode },
   });
   if (errors?.length) throw new Error(errors.map((e) => e.message).join('; '));
   return data.map(toDashboardShape).sort((a, b) => a.receivedAt - b.receivedAt);
