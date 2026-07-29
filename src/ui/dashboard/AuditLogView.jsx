@@ -4,7 +4,13 @@ export default function AuditLogView({ server, partyClientId, stateCode, refresh
   const [entries, setEntries] = useState([]);
 
   useEffect(() => {
-    setEntries(server.getAuditLogForClient(partyClientId, stateCode));
+    let cancelled = false;
+    server.getAuditLogForClient(partyClientId, stateCode).then((result) => {
+      if (!cancelled) setEntries(result);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [server, partyClientId, stateCode, refreshToken]);
 
   return (

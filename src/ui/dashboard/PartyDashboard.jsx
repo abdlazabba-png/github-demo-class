@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { PARTY_CLIENTS } from '../../referenceData/partyClients.js';
 import { statesList } from '../../referenceData/states/index.js';
 import CoverageView from './CoverageView.jsx';
 import EvidenceView from './EvidenceView.jsx';
@@ -13,12 +12,16 @@ const TABS = [
   { key: 'audit', label: 'Audit Log' },
 ];
 
-// server: the shared mockServer instance (see App.jsx). refreshToken: bumps
-// whenever App.jsx's sync loop touches the server, so these views know to
-// re-read — the mock server mutates its own internal Map outside React
-// state, so there's nothing else to subscribe to yet.
-export default function PartyDashboard({ server, refreshToken }) {
-  const [partyClientId, setPartyClientId] = useState(PARTY_CLIENTS[0].id);
+// server: src/sync/amplifyClient.js's exports (see App.jsx), which query
+// AppSync directly. refreshToken bumps whenever the sync loop touches the
+// backend so these views know to re-fetch. myPartyClients: the party
+// clients the signed-in user's Cognito groups actually grant access to
+// (src/auth/usePartyClientGroups.js) — never a free choice; AppSync itself
+// would reject a query for any other partyClientId regardless of what this
+// UI showed, but the picker only offering real options is better UX than
+// letting someone select an option that's guaranteed to fail.
+export default function PartyDashboard({ server, refreshToken, myPartyClients }) {
+  const [partyClientId, setPartyClientId] = useState(myPartyClients[0].id);
   // Phase 4: coverage is only meaningful against one state's own PU count
   // (mixing two states' totals into one "N of N" would misrepresent both),
   // so the dashboard scopes by state alongside party client.
@@ -31,7 +34,7 @@ export default function PartyDashboard({ server, refreshToken }) {
         <label>
           Viewing as
           <select value={partyClientId} onChange={(e) => setPartyClientId(e.target.value)}>
-            {PARTY_CLIENTS.map((c) => (
+            {myPartyClients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
@@ -49,10 +52,10 @@ export default function PartyDashboard({ server, refreshToken }) {
           </select>
         </label>
         <p className="hint">
-          Simulates a party-client login until real auth exists. Every query below is scoped to
-          this client and this state — the dashboard's data layer has no function capable of
-          returning another client's data, or of mixing two states' coverage together (CLAUDE.md:
-          isolation enforced at the access-control layer, not the UI).
+          Every query below is scoped to this client and this state by real Cognito group
+          membership — AppSync itself has no way to return another client's data, or to mix two
+          states' coverage together (CLAUDE.md: isolation enforced at the access-control layer,
+          not the UI).
         </p>
       </div>
 

@@ -9,7 +9,6 @@ import {
   pollingUnitsForWardInState,
   findPollingUnitInState,
 } from '../referenceData/states/index.js';
-import { PARTY_CLIENTS } from '../referenceData/partyClients.js';
 import { checkOcrMismatch, checkPlausibility, worstSeverity } from '../validation/validate.js';
 
 const PARTIES = ['APC', 'PDP', 'LP', 'NNPP'];
@@ -18,13 +17,13 @@ function emptyVotes() {
   return PARTIES.reduce((acc, p) => ({ ...acc, [p]: '' }), {});
 }
 
-export default function CaptureForm({ onCapture }) {
+// myPartyClients: the party clients the signed-in user's Cognito groups
+// actually grant access to (see src/auth/usePartyClientGroups.js) — never
+// a free choice. App.jsx only renders this component once that list is
+// non-empty.
+export default function CaptureForm({ onCapture, myPartyClients }) {
   const [agentId, setAgentId] = useState('agent-demo');
-  // A real deployment would provision each agent's device for exactly one
-  // party client (that's who's paying for and running this monitoring
-  // operation) rather than let the agent pick — this selector stands in
-  // for that provisioning step until real auth exists.
-  const [partyClientId, setPartyClientId] = useState(PARTY_CLIENTS[0].id);
+  const [partyClientId, setPartyClientId] = useState(myPartyClients[0].id);
   // Same provisioning logic as partyClientId: a real device is set up for
   // one state's pilot, not left to pick from every state in the country.
   const [stateCode, setStateCode] = useState(statesList()[0].code);
@@ -191,7 +190,7 @@ export default function CaptureForm({ onCapture }) {
         <label>
           Party Client
           <select value={partyClientId} onChange={(e) => setPartyClientId(e.target.value)}>
-            {PARTY_CLIENTS.map((c) => (
+            {myPartyClients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>

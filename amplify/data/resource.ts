@@ -42,7 +42,14 @@ const schema = a.schema({
       gpsAccuracy: a.float(),
       deviceId: a.string(),
       submissionHash: a.string().required(), // tamper-evidence hash; pair with photo, never trust alone
-      clientTimestamp: a.integer(), // epoch ms from the capturing device (AWSTimestamp is seconds, not ms — plain integer avoids that unit mismatch)
+      // epoch ms from the capturing device. AWSTimestamp is seconds, not ms
+      // (unit mismatch), and GraphQL's Int is 32-bit signed (~2.1 billion
+      // max) — Date.now() in ms is a ~13-digit number that overflows it
+      // immediately (confirmed live: every create() failed with "Variable
+      // 'clientTimestamp' has an invalid value" until this was float).
+      // Float is double-precision and represents ms-since-epoch exactly
+      // for the foreseeable future, same as JS's own Number type.
+      clientTimestamp: a.float(),
       validationSeverity: a.string(), // 'ok' | 'info' | 'unknown' | 'warning' | 'error' — see note above
       validationChecks: a.json(),
     })

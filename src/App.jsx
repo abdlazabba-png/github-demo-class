@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SyncQueue } from './sync/syncQueue.js';
-import { createMockServer } from './sync/mockServer.js';
+import * as amplifyServer from './sync/amplifyClient.js';
+import { useMyPartyClients } from './auth/usePartyClientGroups.js';
 import CaptureForm from './ui/CaptureForm.jsx';
 import QueueStatus from './ui/QueueStatus.jsx';
 import PartyDashboard from './ui/dashboard/PartyDashboard.jsx';
 
-// Stands in for the future AppSync ingestion endpoint (CLAUDE.md: mock
-// backend first for Phase 1). One instance for the tab's lifetime.
-const server = createMockServer({ latencyMs: 400 });
-
-export default function App() {
+export default function App({ signOut, user }) {
   const [records, setRecords] = useState([]);
-  const [serverCount, setServerCount] = useState(0);
   const [ready, setReady] = useState(false);
   const [simulateOffline, setSimulateOffline] = useState(false);
   const [browserOnline, setBrowserOnline] = useState(
@@ -20,13 +16,14 @@ export default function App() {
   // In reality the field-agent app and the party dashboard are separate
   // clients entirely (different devices, different auth). They're two tabs
   // of one demo here purely so both are reachable without standing up a
-  // second app; the dashboard's tenant scoping (see mockServer.js) is what
-  // actually matters, not this toggle.
+  // second app — real isolation comes from Cognito group membership
+  // (amplify/auth/resource.ts), not this toggle.
   const [view, setView] = useState('agent');
-  // Bumped whenever the sync loop touches the mock server, so the
-  // dashboard's views (which read the server's internal state directly,
-  // not through React state) know to re-fetch.
+  // Bumped on every sync-loop touch so the dashboard's views (which read
+  // AppSync directly, not through React state) know to re-fetch.
   const [refreshToken, setRefreshToken] = useState(0);
+
+  const { loading: groupsLoading, partyClients: myPartyClients } = useMyPartyClients();
 
   const effectiveOnline = browserOnline && !simulateOffline;
   const effectiveOnlineRef = useRef(effectiveOnline);
@@ -38,7 +35,6 @@ export default function App() {
     const queue = queueRef.current;
     if (!queue) return;
     setRecords(await queue.all());
-    setServerCount(server.count());
     setRefreshToken((t) => t + 1);
   }, []);
 
@@ -49,13 +45,7 @@ export default function App() {
         // Reads live state via ref so a stale closure never pins the queue
         // to whatever "online" was at construction time.
         isOnline: () => effectiveOnlineRef.current,
-        transport: async (record) => {
-          await server.ingest({
-            id: record.id,
-            payload: record.payload,
-            submissionHash: record.submissionHash,
-          });
-        },
+        transport: (record) => amplifyServer.createSubmission(record),
       }).init();
       if (cancelled) return;
       queueRef.current = queue;
@@ -109,10 +99,20 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Election Result Verification — Phase 2 PoC</h1>
-        <p className="subtitle">
-          Gombe State pilot · offline-first capture · mock ingestion endpoint (no AWS backend yet)
-        </p>
+        <div className="app-header-row">
+          <div>
+            <h1>Election Result Verification — Phase 5</h1>
+            <p className="subtitle">
+              Gombe/Adamawa pilot · offline-first capture · real AWS backend (AppSync/Cognito/S3)
+            </p>
+          </div>
+          <div className="account-panel">
+            <span>{user?.signInDetails?.loginId || 'Signed in'}</span>
+            <button type="button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        </div>
       </header>
 
       <nav className="app-view-toggle">
@@ -128,7 +128,15 @@ export default function App() {
         </button>
       </nav>
 
-      {view === 'agent' ? (
+      {groupsLoading ? (
+        <p>Checking your account's party-client membership…</p>
+      ) : myPartyClients.length === 0 ? (
+        <p className="hint warn">
+          Your account isn't assigned to a party client yet. An administrator needs to add you to
+          the matching Cognito group (see amplify/auth/resource.ts) before you can capture or view
+          anything.
+        </p>
+      ) : view === 'agent' ? (
         <>
           <section className="network-panel">
             <div className="network-status">
@@ -148,12 +156,16 @@ export default function App() {
             </button>
           </section>
 
-          {ready ? <CaptureForm onCapture={handleCapture} /> : <p>Opening local outbox…</p>}
+          {ready ? (
+            <CaptureForm onCapture={handleCapture} myPartyClients={myPartyClients} />
+          ) : (
+            <p>Opening local outbox…</p>
+          )}
 
-          <QueueStatus records={records} serverCount={serverCount} />
+          <QueueStatus records={records} />
         </>
       ) : (
-        <PartyDashboard server={server} refreshToken={refreshToken} />
+        <PartyDashboard server={amplifyServer} refreshToken={refreshToken} myPartyClients={myPartyClients} />
       )}
     </div>
   );

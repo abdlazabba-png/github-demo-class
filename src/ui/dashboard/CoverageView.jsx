@@ -10,8 +10,13 @@ export default function CoverageView({ server, partyClientId, stateCode, refresh
   const [reportedPuCodes, setReportedPuCodes] = useState(new Set());
 
   useEffect(() => {
-    const submissions = server.getSubmissionsForClient(partyClientId, stateCode);
-    setReportedPuCodes(new Set(submissions.map((s) => s.payload.puCode)));
+    let cancelled = false;
+    server.getSubmissionsForClient(partyClientId, stateCode).then((submissions) => {
+      if (!cancelled) setReportedPuCodes(new Set(submissions.map((s) => s.payload.puCode)));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [server, partyClientId, stateCode, refreshToken]);
 
   // The "N of N" denominator is always this one state's own PU count —

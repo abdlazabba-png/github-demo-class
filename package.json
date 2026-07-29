@@ -15,7 +15,9 @@
     "postinstall": "node scripts/copy-ocr-assets.js"
   },
   "dependencies": {
+    "@aws-amplify/ui-react": "^6.15.5",
     "@tesseract.js-data/eng": "^1.0.0",
+    "aws-amplify": "^6.19.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tesseract.js": "^5.1.1"

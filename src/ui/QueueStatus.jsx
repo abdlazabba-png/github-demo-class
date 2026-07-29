@@ -5,7 +5,7 @@ const STATUS_LABEL = {
   failed: 'Failed',
 };
 
-export default function QueueStatus({ records, serverCount }) {
+export default function QueueStatus({ records }) {
   const counts = records.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {});
 
   return (
@@ -15,7 +15,6 @@ export default function QueueStatus({ records, serverCount }) {
         <span>Pending: {counts.pending || 0}</span>
         <span>Syncing: {counts.syncing || 0}</span>
         <span>Synced: {counts.synced || 0}</span>
-        <span>Server received: {serverCount}</span>
       </div>
       <table>
         <thead>
@@ -24,6 +23,7 @@ export default function QueueStatus({ records, serverCount }) {
             <th>Status</th>
             <th>Attempts</th>
             <th>Captured</th>
+            <th>Last error</th>
           </tr>
         </thead>
         <tbody>
@@ -35,11 +35,12 @@ export default function QueueStatus({ records, serverCount }) {
               </td>
               <td>{r.attempts}</td>
               <td>{new Date(r.createdAt).toLocaleTimeString()}</td>
+              <td className="error-cell">{r.lastError || ''}</td>
             </tr>
           ))}
           {records.length === 0 && (
             <tr>
-              <td colSpan={4}>No captures yet.</td>
+              <td colSpan={5}>No captures yet.</td>
             </tr>
           )}
         </tbody>

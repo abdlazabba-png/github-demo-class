@@ -39,6 +39,22 @@ body {
   font-size: 0.9rem;
 }
 
+.app-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.account-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .network-panel,
 .capture-form,
 .queue-status {
@@ -237,6 +253,13 @@ td {
   text-align: left;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
+}
+
+.error-cell {
+  color: var(--danger);
+  font-size: 0.75rem;
+  max-width: 260px;
+  word-break: break-word;
 }
 
 .badge {

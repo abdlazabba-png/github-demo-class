@@ -4,7 +4,13 @@ export default function DiscrepancyQueue({ server, partyClientId, stateCode, ref
   const [discrepancies, setDiscrepancies] = useState([]);
 
   useEffect(() => {
-    setDiscrepancies(server.getDiscrepanciesForClient(partyClientId, stateCode));
+    let cancelled = false;
+    server.getDiscrepanciesForClient(partyClientId, stateCode).then((result) => {
+      if (!cancelled) setDiscrepancies(result);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [server, partyClientId, stateCode, refreshToken]);
 
   return (
