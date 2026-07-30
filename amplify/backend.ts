@@ -53,6 +53,30 @@ validateSubmissionLambda.addToRolePolicy(
 // own type declarations after the construct-level call failed to type-check.
 backend.validateSubmission.addEnvironment('SUBMISSION_TABLE_NAME', submissionTable.tableName);
 
+// Mirrors the Submission wiring above for the reviewer/edit flow's
+// SubmissionCorrection table (see amplify/data/resource.ts) — same
+// Streams -> Lambda validation pattern, reusing the same function rather
+// than a second one, since the only new logic is ~30 lines
+// (processCorrectionInsert in the handler) and this avoids a second
+// CloudFormation resource + IAM role for it.
+//
+// No extra dynamodb:Query PolicyStatement needed here unlike the
+// Submission table above: this Lambda only ever does a plain
+// UpdateCommand by id against SubmissionCorrection, never a Query against
+// one of its secondary indexes, so grantReadWriteData() alone is enough.
+const correctionTable = backend.data.resources.tables['SubmissionCorrection'];
+
+validateSubmissionLambda.addEventSource(
+  new DynamoEventSource(correctionTable, {
+    startingPosition: StartingPosition.LATEST,
+    batchSize: 10,
+    retryAttempts: 3,
+  })
+);
+
+correctionTable.grantReadWriteData(validateSubmissionLambda);
+backend.validateSubmission.addEnvironment('CORRECTION_TABLE_NAME', correctionTable.tableName);
+
 // Group auto-assignment (auth/post-confirmation/). defineAuth's `triggers`
 // option wires the Cognito LambdaConfig + invoke permission automatically,
 // but AdminAddUserToGroup is an admin API this function also needs and

@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
+import CorrectionForm from './CorrectionForm.jsx';
+import CorrectionHistory from './CorrectionHistory.jsx';
 
-export default function DiscrepancyQueue({ server, partyClientId, stateCode, refreshToken }) {
+// The reviewer/edit flow's primary surface (CLAUDE.md: "edits go through a
+// logged reviewer flow only") — this is where a reviewer is already
+// looking at a flagged problem, so "Request Correction" lives here rather
+// than duplicated across every view. An item with a correction stays
+// listed regardless (never disappears): the original flagged discrepancy
+// against the original data is itself part of the audit trail, so it's
+// only ever visually marked "corrected," never hidden.
+export default function DiscrepancyQueue({ server, partyClientId, stateCode, refreshToken, reviewerId, myRole }) {
   const [discrepancies, setDiscrepancies] = useState([]);
   const [error, setError] = useState(null);
+  const [localRefresh, setLocalRefresh] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -18,7 +28,7 @@ export default function DiscrepancyQueue({ server, partyClientId, stateCode, ref
     return () => {
       cancelled = true;
     };
-  }, [server, partyClientId, stateCode, refreshToken]);
+  }, [server, partyClientId, stateCode, refreshToken, localRefresh]);
 
   return (
     <section className="dashboard-view discrepancy-queue">
@@ -35,6 +45,7 @@ export default function DiscrepancyQueue({ server, partyClientId, stateCode, ref
               <span className={`check check-${d.validation.overallSeverity}`}>
                 {d.validation.overallSeverity}
               </span>
+              {d.corrections.length > 0 && <span className="badge corrected">Corrected</span>}
             </div>
             <ul className="discrepancy-reasons">
               {d.validation.checks
@@ -43,6 +54,15 @@ export default function DiscrepancyQueue({ server, partyClientId, stateCode, ref
                   <li key={c.type}>{c.message}</li>
                 ))}
             </ul>
+            <CorrectionHistory corrections={d.corrections} />
+            {myRole === 'dashboard' && (
+              <CorrectionForm
+                server={server}
+                submission={d}
+                reviewerId={reviewerId}
+                onFiled={() => setLocalRefresh((t) => t + 1)}
+              />
+            )}
           </li>
         ))}
       </ul>

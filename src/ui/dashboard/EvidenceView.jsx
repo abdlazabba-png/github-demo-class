@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getUrl } from 'aws-amplify/storage';
+import CorrectionHistory from './CorrectionHistory.jsx';
 
 // Photos now live in S3 (amplify/storage/resource.ts) — the mock-server
 // phase's "not on this device" fallback for a locally-only photo no
@@ -48,6 +49,9 @@ function EvidenceRow({ submission }) {
       ) : (
         <p className="hint">Loading photo…</p>
       )}
+      {/* Read-only here — the reviewer/edit flow's one write-action surface
+          is DiscrepancyQueue.jsx, not duplicated here. */}
+      <CorrectionHistory corrections={submission.corrections} />
     </li>
   );
 }
@@ -60,7 +64,7 @@ export default function EvidenceView({ server, partyClientId, stateCode, refresh
     let cancelled = false;
     setError(null);
     server
-      .getSubmissionsForClient(partyClientId, stateCode)
+      .getSubmissionsWithCorrectionsForClient(partyClientId, stateCode)
       .then((subs) => {
         if (!cancelled) setSubmissions(subs);
       })

@@ -10,21 +10,19 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 //
 // create + read only — no update/delete. "Never silently editable after
 // submission" (CLAUDE.md) is enforced by the schema, not left to app
-// convention; a logged reviewer/edit flow is its own future model with
-// its own audited path, not a bolt-on update permission here.
+// convention. The logged reviewer/edit flow lives entirely in the
+// SubmissionCorrection model below: it never mutates a Submission row,
+// it only ever adds a new, attributed, reasoned record layered on top.
 //
 // validationSeverity/validationChecks are left nullable and are NOT
 // written by the client. Duplicate detection needs visibility across all
 // of a party client's submissions, which no single agent's device has —
 // same reasoning as the mock-server phase (src/validation/validate.js).
-// Populating these for real needs a server-side step (DynamoDB Streams ->
-// Lambda reusing src/validation/validate.js -> update the record) that
-// isn't implemented in this pass: it's untested AWS-side wiring with no
-// way to verify it here without deploy access, so it's tracked as a
-// concrete next step rather than shipped unverified. CaptureForm already
-// runs the two checks that ARE safe to compute client-side (OCR-mismatch,
-// plausibility) for an immediate agent-facing warning; that doesn't
-// change with a real backend.
+// Populated by amplify/functions/validate-submission/handler.ts via
+// DynamoDB Streams -> Lambda reusing src/validation/validate.js.
+// CaptureForm already runs the two checks that ARE safe to compute
+// client-side (OCR-mismatch, plausibility) for an immediate agent-facing
+// warning; that doesn't change with a real backend.
 const schema = a.schema({
   Submission: a
     .model({
@@ -61,6 +59,58 @@ const schema = a.schema({
       // Duplicate-detection needs "prior submissions for this PU" — the
       // future validation Lambda's query, not a client-facing one.
       index('puCode').queryField('listByPollingUnit'),
+    ]),
+
+  // The reviewer/edit flow (CLAUDE.md: "never silently editable after
+  // submission — edits go through a logged reviewer flow only"). Never
+  // updates a Submission row; each correction is its own new, attributed,
+  // reasoned, immutable record referencing the submission it corrects.
+  // A wrong correction gets ANOTHER correction filed against it, never
+  // edited in place — same create+read-only, no-update/delete shape as
+  // Submission itself, for the same reason.
+  //
+  // Scope is partyVotes only for v1 — not PU/ward/LGA (would break
+  // puCode-indexed duplicate detection) and not photo/GPS (not what a
+  // "data-entry error" means here).
+  //
+  // Enforcement note: this authorization rule only checks
+  // groupDefinedIn('partyClientId'), same as Submission — it does NOT
+  // restrict corrections to a privileged "reviewer" sub-role. Any signed-in
+  // member of a party client's Cognito group can call this create
+  // mutation directly, regardless of their custom:role. The UI (see
+  // src/ui/dashboard/CorrectionForm.jsx) only shows the control to
+  // custom:role=dashboard accounts, but that is a UI gate, not an
+  // access-control boundary — deliberate: the guarantee this model
+  // provides is "immutable original + full attribution + full audit
+  // trail," not "restricted to a privileged few." A truly enforced
+  // boundary would need a second Cognito group per party client, doubling
+  // the already-tedious "three touchpoints per new party client" cost
+  // documented in ../auth/resource.ts.
+  SubmissionCorrection: a
+    .model({
+      submissionId: a.string().required(),
+      partyClientId: a.string().required(), // denormalized: needed for the auth rule itself
+      stateCode: a.string().required(), // denormalized: needed for the index
+      puCode: a.string().required(), // denormalized: avoids a cross-table read in the validation Lambda
+      // Signed-in user's email, set by the client from the auth session —
+      // never a typed form field. Unlike Submission.agentId (a free-text
+      // input on CaptureForm), this is meant to be genuinely
+      // session-attributed, matching CLAUDE.md's "never anonymous" for
+      // the flow whose entire purpose is auditability.
+      reviewerId: a.string().required(),
+      reviewerNote: a.string().required(),
+      previousPartyVotes: a.json().required(),
+      correctedPartyVotes: a.json().required(),
+      validationSeverity: a.string(), // server-populated, same pattern as Submission
+      validationChecks: a.json(), // server-populated
+    })
+    .authorization((allow) => [allow.groupDefinedIn('partyClientId').to(['create', 'read'])])
+    .secondaryIndexes((index) => [
+      // Dashboard fetches all of a party client's corrections for a state
+      // in one query, then groups by submissionId client-side — same
+      // "don't multiply composite indexes for a filter that can cheaply
+      // happen client-side" reasoning already used elsewhere in this app.
+      index('partyClientId').sortKeys(['stateCode']).queryField('listCorrectionsByPartyClientAndState'),
     ]),
 });
 

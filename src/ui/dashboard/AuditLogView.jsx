@@ -24,9 +24,9 @@ export default function AuditLogView({ server, partyClientId, stateCode, refresh
     <section className="dashboard-view audit-log-view">
       <h3>Audit log</h3>
       <p className="hint">
-        Append-only record of submissions received for this party client — entries are never
-        edited or removed. A future reviewer/edit flow (CLAUDE.md: edits are never silent) will
-        log its actions here too.
+        Append-only record of submissions received and corrections filed for this party client —
+        entries are never edited or removed. A correction never changes the original submission
+        row; it only adds a new, attributed, reasoned entry here.
       </p>
       {error && <p className="hint warn">Couldn't load audit log: {error}</p>}
       {entries.length === 0 && !error && <p className="hint">No activity yet.</p>}
@@ -34,17 +34,27 @@ export default function AuditLogView({ server, partyClientId, stateCode, refresh
         <thead>
           <tr>
             <th>Time</th>
+            <th>Type</th>
             <th>PU</th>
-            <th>Agent</th>
+            <th>Attributed to</th>
+            <th>Detail</th>
             <th>Validation</th>
           </tr>
         </thead>
         <tbody>
           {entries.map((e) => (
-            <tr key={e.id}>
-              <td>{new Date(e.receivedAt).toLocaleString()}</td>
-              <td>{e.puCode}</td>
-              <td>{e.agentId}</td>
+            <tr key={`${e.type}-${e.id}`} className={`audit-row audit-row-${e.type}`}>
+              <td>{new Date(e.at).toLocaleString()}</td>
+              <td>{e.type === 'correction' ? 'Correction' : 'Submission'}</td>
+              <td>{e.type === 'submission' ? e.puCode : ''}</td>
+              <td>{e.type === 'submission' ? e.agentId : e.reviewerId}</td>
+              <td>
+                {e.type === 'correction'
+                  ? Object.keys(e.correctedPartyVotes)
+                      .map((p) => `${p}: ${e.previousPartyVotes[p] ?? '—'} → ${e.correctedPartyVotes[p]}`)
+                      .join(', ') + ` (${e.reviewerNote})`
+                  : ''}
+              </td>
               <td>
                 <span className={`check check-${e.validationSeverity}`}>{e.validationSeverity}</span>
               </td>

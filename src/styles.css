@@ -397,3 +397,66 @@ td {
   font-size: 0.85rem;
   color: var(--muted);
 }
+
+.badge.corrected {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--accent);
+}
+
+.correction-toggle {
+  margin-top: 8px;
+}
+
+.correction-form {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.correction-reason textarea {
+  width: 100%;
+  min-height: 60px;
+}
+.correction-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.correction-history {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.correction-item {
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-left-color: var(--accent);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+.correction-item-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+.correction-note {
+  margin: 0 0 4px;
+  font-style: italic;
+}
+.correction-diff {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.audit-row-correction td {
+  color: var(--accent);
+}

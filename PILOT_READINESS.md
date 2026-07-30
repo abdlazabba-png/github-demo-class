@@ -63,11 +63,6 @@ Practical consequences:
 
 ## Product/design decisions — need your call, not just code
 
-- [ ] **A reviewer/edit flow.** CLAUDE.md requires "edits go through a
-  logged reviewer flow only" — this doesn't exist. Submissions are
-  currently create+read only with no update path at all, which is safe
-  (nothing can be silently changed) but also means a genuine data-entry
-  error caught after submission has no correction path yet.
 - [ ] **Separate agent app vs. dashboard app.** Right now both live in one
   page (a Field Agent / Party Dashboard toggle) for demo convenience. A
   real deployment might want these as genuinely separate apps/URLs,
@@ -121,3 +116,41 @@ on nested `bundleDependencies` inside `aws-cdk-lib`'s toolkit bundle (a known
 npm lockfile-writer bug), reproduced identically across repeated clean local
 installs. See the "sandbox vs. deployed backend" note above before assuming
 anything tested locally is present on the deployed site.
+
+**The reviewer/edit flow** (CLAUDE.md: "edits go through a logged reviewer
+flow only") is built and verified end-to-end against the real sandbox
+backend — see `amplify/data/resource.ts`'s `SubmissionCorrection` model,
+`amplify/functions/validate-submission/handler.ts`'s second Streams source,
+`src/ui/dashboard/CorrectionForm.jsx`/`CorrectionHistory.jsx`, and
+`src/auth/useMyRole.js`. A `Submission` row is never mutated; a correction
+is a new, attributed (real signed-in email, never typed), reasoned,
+immutable record layered on top, server-validated the same way the
+original submission is. Verified live: filed a correction on a real
+implausible submission (severity flipped from `error` to `ok` on the
+correction, computed by the Lambda, not the client), confirmed the original
+discrepancy stays listed with a "corrected" badge rather than disappearing,
+confirmed a second correction's "previous" value chains from the first
+correction's new value rather than the original, confirmed both entries
+appear in the Audit Log correctly attributed and chronologically ordered,
+and confirmed AppSync rejects a cross-tenant query for the new model
+exactly as it does for `Submission`.
+
+Two design calls were made without an explicit answer from you (asked, no
+response came through — proceeded with the stated recommendation in each
+case; flagging clearly here since these are real tradeoffs, not settled
+facts):
+- **Enforcement is UI-only, not an access-control boundary.** Any signed-in
+  member of a party's Cognito group can technically call the correction
+  mutation directly; the UI only shows "Request Correction" to
+  `custom:role=dashboard` accounts. The guarantee is "immutable original +
+  full attribution + full audit trail," not "restricted to a privileged
+  few." Documented directly in `amplify/data/resource.ts`'s
+  `SubmissionCorrection` comment. A real enforced boundary would need a
+  second Cognito group per party client.
+- **Single-actor, immediate correction — no two-person approval step.** One
+  dashboard-role user files a correction with a mandatory reason; that
+  itself is treated as "the logged reviewer flow." Not built: a
+  propose/approve two-actor workflow with a pending state.
+
+If either of these should actually be the enforced/two-actor version, that's
+a real follow-up, not a bug — say so and it can be built.

@@ -165,7 +165,12 @@ export default function App({ signOut, user }) {
           <QueueStatus records={records} />
         </>
       ) : (
-        <PartyDashboard server={amplifyServer} refreshToken={refreshToken} myPartyClients={myPartyClients} />
+        <PartyDashboard
+          server={amplifyServer}
+          refreshToken={refreshToken}
+          myPartyClients={myPartyClients}
+          user={user}
+        />
       )}
     </div>
   );
