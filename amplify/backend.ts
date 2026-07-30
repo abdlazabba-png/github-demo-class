@@ -2,16 +2,19 @@ import { defineBackend } from '@aws-amplify/backend';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { Stack } from 'aws-cdk-lib';
 import { auth } from './auth/resource.js';
 import { data } from './data/resource.js';
 import { storage } from './storage/resource.js';
 import { validateSubmission } from './functions/validate-submission/resource.js';
+import { postConfirmation } from './auth/post-confirmation/resource.js';
 
 const backend = defineBackend({
   auth,
   data,
   storage,
   validateSubmission,
+  postConfirmation,
 });
 
 // Wires the DynamoDB Streams -> Lambda validation pipeline
@@ -49,3 +52,31 @@ validateSubmissionLambda.addToRolePolicy(
 // .resources.lambda — confirmed against @aws-amplify/backend-function's
 // own type declarations after the construct-level call failed to type-check.
 backend.validateSubmission.addEnvironment('SUBMISSION_TABLE_NAME', submissionTable.tableName);
+
+// Group auto-assignment (auth/post-confirmation/). defineAuth's `triggers`
+// option wires the Cognito LambdaConfig + invoke permission automatically,
+// but AdminAddUserToGroup is an admin API this function also needs and
+// isn't something a generic trigger wiring would know to grant — same
+// reasoning as the explicit index-query grant above; Amplify's automatic
+// grants have already proven not to cover everything a trigger function
+// actually needs.
+//
+// Deliberately NOT `resources: [backend.auth.resources.userPool.userPoolArn]`
+// — confirmed live: referencing the UserPool resource's own ARN token from
+// a policy attached to a Lambda that's ALSO wired as that same UserPool's
+// trigger creates a resource-level circular dependency within the auth
+// stack (the UserPool needs the Lambda's ARN for LambdaConfig; this policy
+// would need the UserPool's ARN — CloudFormation can't order that).
+// Stack-level pseudo-parameters (region/account) don't reference the
+// UserPool resource at all, so they don't create that edge; the tradeoff
+// is a same-account/region wildcard instead of pinning to this one pool,
+// which is an acceptable least-privilege loosening here since the
+// trigger's own invoke permission (which Amplify does scope correctly) is
+// what actually controls who can invoke this function in the first place.
+const authStack = Stack.of(backend.auth.resources.userPool);
+backend.postConfirmation.resources.lambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['cognito-idp:AdminAddUserToGroup'],
+    resources: [`arn:aws:cognito-idp:${authStack.region}:${authStack.account}:userpool/*`],
+  })
+);

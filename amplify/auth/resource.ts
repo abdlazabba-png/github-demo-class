@@ -1,4 +1,5 @@
 import { defineAuth } from '@aws-amplify/backend';
+import { postConfirmation } from './post-confirmation/resource.js';
 
 // CLAUDE.md: "strict data isolation between party clients... enforce this
 // at the access-control layer, not just the UI." Cognito User Groups are
@@ -14,16 +15,20 @@ import { defineAuth } from '@aws-amplify/backend';
 // matching path rule in ../storage/resource.ts, and an entry in
 // src/referenceData/partyClients.js.
 //
-// Group membership is NOT auto-assigned at signup in this pass — with
-// only two demo clients, that's a manual `aws cognito-idp
-// admin-add-user-to-group` per test user for now. A post-confirmation
-// Lambda trigger that reads custom:partyClientId and assigns the matching
-// group automatically is the natural next step once there's a real
-// onboarding flow, not before (untested Lambda wiring isn't something to
-// ship blind — see PROJECT_STATE notes on this backend).
+// Group membership IS auto-assigned at signup: ./post-confirmation/
+// reads custom:partyClientId off the newly confirmed user and calls
+// AdminAddUserToGroup. An admin still has to set that attribute at
+// user-creation time (admin-create-user --user-attributes
+// Name=custom:partyClientId,...) — self-service sign-up with party-client
+// selection is a separate, deliberately out-of-scope UX/security decision
+// — but the follow-up admin-add-user-to-group call this comment used to
+// describe as a required manual step is no longer needed.
 export const auth = defineAuth({
   loginWith: {
     email: true,
+  },
+  triggers: {
+    postConfirmation,
   },
   userAttributes: {
     'custom:partyClientId': {
