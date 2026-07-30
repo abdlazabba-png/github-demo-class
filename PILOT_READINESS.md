@@ -7,6 +7,31 @@ core platform (auth, data, storage, server-side validation, group
 auto-assignment, CI/CD, budget monitoring) was built and verified end-to-end
 against the real AWS backend.
 
+## The sandbox and the deployed (Amplify Hosting) backend are separate
+
+`npx ampx sandbox` (used for all manual browser testing this session) and
+`npx ampx pipeline-deploy --branch master` (run by Amplify Hosting CI/CD, see
+`amplify.yml`) each provision their **own independent backend** — separate
+Cognito User Pool, separate DynamoDB tables, separate S3 bucket — even though
+both come from the same `amplify/` source. Discovered when a Cognito password
+reset applied to the sandbox pool (`eu-north-1_QnEoOjgIs`, the one referenced
+by the `amplify_outputs.json` committed to this repo) had no effect on the
+deployed site, which turned out to be backed by a second, completely empty
+pool (`eu-north-1_BXBv9wsm7`) created by the branch's first `pipeline-deploy`
+run.
+
+Practical consequences:
+- **No test users, seed data, or manual fixes made against the sandbox carry
+  over to the deployed site**, or vice versa. Each needs its own setup.
+- `amplify_outputs.json` committed to git reflects whichever backend was last
+  built locally (sandbox) — the deployed frontend gets its own copy generated
+  fresh during the `backend` phase of `amplify.yml`, not the committed one.
+- A user created via `admin-create-user` + `admin-set-user-password` (as
+  opposed to a real sign-up/confirm flow) does **not** fire the
+  `PostConfirmation` group-auto-assignment trigger — group membership must be
+  set explicitly with `admin-add-user-to-group` for accounts provisioned this
+  way, in either backend.
+
 ## Operational — not something I can do
 
 - [ ] **Source real PU/Ward/LGA reference data through a licensed/authoritative
@@ -82,9 +107,17 @@ against the real AWS backend.
 
 Auth (Cognito, group-based tenant isolation, group auto-assignment), data
 (AppSync/DynamoDB with server-side validation via DynamoDB Streams →
-Lambda), storage (S3 per-party-client photo storage), CI/CD build spec
-(`amplify.yml`, needs the GitHub connection step in the AWS Console), AWS
-Budget alert ($20/month, 80% actual + 100% forecasted thresholds), and a
-security review of the latest changes (no findings). All verified against
-the real deployed backend, not just locally — see commit history for the
-specific bugs found and fixed along the way.
+Lambda), storage (S3 per-party-client photo storage), AWS Budget alert
+($20/month, 80% actual + 100% forecasted thresholds), and a security review
+of the latest changes (no findings). All verified against the real deployed
+backend, not just locally — see commit history for the specific bugs found
+and fixed along the way.
+
+CI/CD (`amplify.yml`, GitHub connected via Amplify Hosting console) is live
+and has produced a successful end-to-end build + deploy on `master` (backend
+CDK deploy + frontend Vite build + deploy, ~10 min). Uses `npm install`
+rather than `npm ci` in both phases — `npm ci` failed non-deterministically
+on nested `bundleDependencies` inside `aws-cdk-lib`'s toolkit bundle (a known
+npm lockfile-writer bug), reproduced identically across repeated clean local
+installs. See the "sandbox vs. deployed backend" note above before assuming
+anything tested locally is present on the deployed site.
