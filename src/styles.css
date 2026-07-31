@@ -460,3 +460,141 @@ td {
 .audit-row-correction td {
   color: var(--accent);
 }
+
+/* Coverage charts (src/ui/dashboard/CoverageCharts.jsx). Single sequential
+   hue (--accent) throughout — magnitude/trend charts, not multi-series
+   identity, so there's no categorical palette to validate. Track = a
+   lighter step of the same hue (blue-on-blue), per the meter mark spec. */
+.coverage-view h4 {
+  margin: 18px 0 8px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.viz-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+.viz-meter-track {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  overflow: hidden;
+}
+.viz-meter-fill {
+  height: 100%;
+  min-width: 2px;
+  border-radius: 8px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+.viz-meter-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  text-align: right;
+}
+
+.viz-bar-chart {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.viz-bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 30%) 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+.viz-bar-row-label {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viz-bar-track {
+  height: 16px;
+  max-height: 24px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  overflow: hidden;
+  display: block;
+}
+.viz-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+}
+.viz-bar-row-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.viz-timeline {
+  position: relative;
+}
+.viz-timeline-svg {
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+.viz-axis-line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.viz-axis-label {
+  fill: var(--muted);
+  font-size: 9px;
+}
+.viz-area-fill {
+  fill: var(--accent);
+  fill-opacity: 0.1;
+  stroke: none;
+}
+.viz-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.viz-end-marker {
+  fill: var(--accent);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.viz-crosshair {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.viz-hover-marker {
+  fill: var(--accent);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.viz-tooltip {
+  position: absolute;
+  top: -4px;
+  transform: translate(-50%, -100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.viz-tooltip strong {
+  color: var(--accent);
+}

@@ -11,7 +11,7 @@ import {
 } from '../referenceData/states/index.js';
 import { checkOcrMismatch, checkPlausibility, worstSeverity } from '../validation/validate.js';
 
-const PARTIES = ['APC', 'PDP', 'LP', 'NNPP'];
+const PARTIES = ['APC', 'PDP', 'LP', 'NNPP', 'ADC', 'APM'];
 
 function emptyVotes() {
   return PARTIES.reduce((acc, p) => ({ ...acc, [p]: '' }), {});
