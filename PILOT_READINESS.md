@@ -118,22 +118,30 @@ installs. See the "sandbox vs. deployed backend" note above before assuming
 anything tested locally is present on the deployed site.
 
 **The reviewer/edit flow** (CLAUDE.md: "edits go through a logged reviewer
-flow only") is built and verified end-to-end against the real sandbox
-backend — see `amplify/data/resource.ts`'s `SubmissionCorrection` model,
+flow only") is built and verified end-to-end against **both** the sandbox
+and the deployed Amplify Hosting backend (separate backends, see above) —
+see `amplify/data/resource.ts`'s `SubmissionCorrection` model,
 `amplify/functions/validate-submission/handler.ts`'s second Streams source,
 `src/ui/dashboard/CorrectionForm.jsx`/`CorrectionHistory.jsx`, and
 `src/auth/useMyRole.js`. A `Submission` row is never mutated; a correction
 is a new, attributed (real signed-in email, never typed), reasoned,
 immutable record layered on top, server-validated the same way the
-original submission is. Verified live: filed a correction on a real
-implausible submission (severity flipped from `error` to `ok` on the
-correction, computed by the Lambda, not the client), confirmed the original
-discrepancy stays listed with a "corrected" badge rather than disappearing,
-confirmed a second correction's "previous" value chains from the first
-correction's new value rather than the original, confirmed both entries
-appear in the Audit Log correctly attributed and chronologically ordered,
-and confirmed AppSync rejects a cross-tenant query for the new model
-exactly as it does for `Submission`.
+original submission is. Verified live on each backend: filed a correction
+on a real implausible submission (severity flipped from `error` to `ok` on
+the correction, computed by the Lambda, not the client), confirmed the
+original discrepancy stays listed with a "corrected" badge rather than
+disappearing, confirmed both entries appear in the Audit Log correctly
+attributed and chronologically ordered, and confirmed AppSync rejects a
+cross-tenant query for the new model exactly as it does for `Submission`.
+Correction chaining (a second correction's "previous" value coming from
+the first correction's new value, not the original) was verified on the
+sandbox. Test data from both verification passes has been deleted from
+both backends' tables.
+
+One live-testing gotcha worth remembering: after changing a user's
+`custom:role` via `admin-update-user-attributes`, an already-open browser
+tab needs a full page reload, not just an in-app sign-out/sign-in, to pick
+up the new claim — the in-SPA re-login reused a cached session token.
 
 Two design calls were made without an explicit answer from you (asked, no
 response came through — proceeded with the stated recommendation in each
