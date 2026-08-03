@@ -9,7 +9,7 @@ import CorrectionHistory from './CorrectionHistory.jsx';
 // listed regardless (never disappears): the original flagged discrepancy
 // against the original data is itself part of the audit trail, so it's
 // only ever visually marked "corrected," never hidden.
-export default function DiscrepancyQueue({ server, partyClientId, stateCode, refreshToken, reviewerId, myRole }) {
+export default function DiscrepancyQueue({ server, partyClientId, stateCode, refreshToken, reviewerId, myRoles }) {
   const [discrepancies, setDiscrepancies] = useState([]);
   const [error, setError] = useState(null);
   const [localRefresh, setLocalRefresh] = useState(0);
@@ -55,7 +55,7 @@ export default function DiscrepancyQueue({ server, partyClientId, stateCode, ref
                 ))}
             </ul>
             <CorrectionHistory corrections={d.corrections} />
-            {myRole === 'dashboard' && (
+            {myRoles.includes('Reviewer') && (
               <CorrectionForm
                 server={server}
                 submission={d}

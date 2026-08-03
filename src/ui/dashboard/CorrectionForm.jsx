@@ -3,10 +3,13 @@ import { useState } from 'react';
 // The reviewer/edit flow's one write-action surface (CLAUDE.md: "edits go
 // through a logged reviewer flow only"). Inline expand/collapse rather than
 // a modal — no modal pattern exists anywhere in this codebase, so this
-// doesn't introduce one. Gated by custom:role=dashboard at the call site
-// (src/ui/dashboard/DiscrepancyQueue.jsx), not internally — see the
-// enforcement note on SubmissionCorrection in amplify/data/resource.ts for
-// what that gate does and doesn't guarantee.
+// doesn't introduce one. Gated by Reviewer role membership (within this
+// party) at the call site (src/ui/dashboard/DiscrepancyQueue.jsx), not
+// internally — but unlike the earlier custom:role gate this replaced,
+// that's now backed by real server-side enforcement:
+// amplify/data/resource.ts's groupDefinedIn('requiredCreatorGroup') rule
+// independently rejects the create() call for anyone not a real member of
+// `${partyClientId}__Reviewer`, regardless of what this component renders.
 //
 // reviewerId is a prop, not a field in this form — it comes from the
 // caller's own signed-in session (user.signInDetails.loginId, threaded

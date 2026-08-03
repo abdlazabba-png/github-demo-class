@@ -47,6 +47,20 @@ marketing:
   confirmation before submission. Never auto-submit OCR output as
   ground truth.
 
+  ## Installability requirement — explicit, not implied
+
+The agent-facing app must be genuinely installable to a phone's home
+screen, not just "offline-capable in a browser tab." This means:
+- A valid web app manifest (name, icons at required sizes, theme color,
+  `display: standalone`)
+- A working "Add to Home Screen" / install prompt on both Android
+  (primary target) and iOS Safari
+- Once installed, the app opens full-screen from the home-screen icon,
+  not inside a visible browser chrome/address bar
+- Test this explicitly on a real low-end Android device before Phase 3
+  (the pilot), not just in desktop browser dev tools — installability
+  behavior varies meaningfully between simulated and real conditions
+
 ## Build sequence — follow this order, do not skip ahead
 
 1. **Phase 1 — Offline-sync proof of concept (build and test this
@@ -93,3 +107,20 @@ marketing:
   official systems (BVAS/IReV) — this is an independent tool.
 - Don't build any public-facing result display — party-client
   dashboards only, behind auth.
+
+  ## Role matrix — explicit, not implied
+
+Every user belongs to exactly one tenant (party) group and exactly one
+role group. Access control checks both dimensions together.
+
+| Role group   | Scope within their party            | Permissions |
+|--------------|--------------------------------------|-------------|
+| FieldAgent   | Assigned PU(s) only                  | Create submissions for assigned PU; view/edit own pending (unsynced) submissions; cannot edit after acceptance |
+| Coordinator  | Their LGA/ward                       | View coverage & submissions for their agents; flag issues; cannot edit vote figures directly |
+| Reviewer     | Full party dataset                   | Create Corrections on flagged or manually-identified submissions; cannot create Submissions themselves |
+| PartyAdmin   | Full party dataset                   | Manage agent roster & PU assignments; view dashboard, coverage, evidence, audit log; cannot create Submissions or Corrections |
+
+Role groups (`FieldAgent`, `Coordinator`, `Reviewer`, `PartyAdmin`) are
+distinct from tenant/party groups (`party-demo-alpha`, etc.) and must both
+be checked together in every access rule. A user with `Reviewer` +
+`party-demo-alpha` can correct submissions only within `party-demo-alpha`.

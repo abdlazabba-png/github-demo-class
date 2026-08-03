@@ -95,6 +95,12 @@ export async function createSubmission(record) {
     deviceId,
     submissionHash: record.submissionHash,
     clientTimestamp: timestamp,
+    // CLAUDE.md's "Role matrix": only the FieldAgent role may create
+    // Submissions — enforced by amplify/data/resource.ts's
+    // groupDefinedIn('requiredCreatorGroup') rule checking real Cognito
+    // group membership, not by trusting this string. A caller who isn't
+    // actually in this compound group gets rejected by AppSync itself.
+    requiredCreatorGroup: `${partyClientId}__FieldAgent`,
   });
 
   if (result.errors?.length) {
@@ -166,6 +172,9 @@ export async function createCorrection({
     reviewerNote,
     previousPartyVotes: JSON.stringify(previousPartyVotes),
     correctedPartyVotes: JSON.stringify(correctedPartyVotes),
+    // See createSubmission's requiredCreatorGroup comment above — same
+    // mechanism, Reviewer role instead of FieldAgent.
+    requiredCreatorGroup: `${partyClientId}__Reviewer`,
   });
   if (result.errors?.length) {
     throw new Error(result.errors.map((e) => e.message).join('; '));

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { statesList } from '../../referenceData/states/index.js';
-import { useMyRole } from '../../auth/useMyRole.js';
+import { useMyRoleGroups } from '../../auth/useMyRoleGroups.js';
 import CoverageView from './CoverageView.jsx';
 import EvidenceView from './EvidenceView.jsx';
 import DiscrepancyQueue from './DiscrepancyQueue.jsx';
@@ -29,12 +29,17 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
   const [stateCode, setStateCode] = useState(statesList()[0].code);
   const [activeTab, setActiveTab] = useState('coverage');
 
-  // The reviewer/edit flow (CorrectionForm.jsx) needs both of these: myRole
-  // gates whether "Request Correction" is shown at all (custom:role, see
-  // useMyRole.js — a UI gate, not the access-control boundary), and
-  // reviewerId is what actually gets written onto a correction, always the
-  // signed-in user's own email, never a typed field.
-  const { role: myRole } = useMyRole();
+  // The reviewer/edit flow (CorrectionForm.jsx) needs both of these:
+  // myRoles gates whether "Request Correction" is shown at all (Reviewer
+  // role WITHIN partyClientId, see useMyRoleGroups.js — role is party-
+  // scoped, so this hook takes partyClientId and re-checks whenever the
+  // "Viewing as" selector changes. This UI gate mirrors a real
+  // access-control boundary now enforced server-side by
+  // amplify/data/resource.ts's groupDefinedIn('requiredCreatorGroup')
+  // rule, not just a hidden button), and reviewerId is what actually gets
+  // written onto a correction, always the signed-in user's own email,
+  // never a typed field.
+  const { roles: myRoles } = useMyRoleGroups(partyClientId);
   const reviewerId = user?.signInDetails?.loginId;
 
   return (
@@ -94,7 +99,7 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
           stateCode={stateCode}
           refreshToken={refreshToken}
           reviewerId={reviewerId}
-          myRole={myRole}
+          myRoles={myRoles}
         />
       )}
       {activeTab === 'audit' && (

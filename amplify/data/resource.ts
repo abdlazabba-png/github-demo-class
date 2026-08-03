@@ -14,6 +14,50 @@ import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
 // SubmissionCorrection model below: it never mutates a Submission row,
 // it only ever adds a new, attributed, reasoned record layered on top.
 //
+// create requires the FieldAgent role group AND membership in the
+// record's own partyClientId group together (CLAUDE.md's "Role matrix").
+// A custom Lambda authorizer was the first approach here and had to be
+// abandoned — confirmed live that AppSync resolves auth mode from the
+// credential's own shape before checking field-level permissions, so a
+// genuine Cognito access token (which every signed-in user already has)
+// is unconditionally treated as userPool auth on this API, never lambda,
+// regardless of client-side authMode hints (see ../auth/resource.ts for
+// the full account of what was tried and ruled out). requiredCreatorGroup
+// below is the actual fix: the client sets it to
+// `${partyClientId}__FieldAgent` at creation time, and groupDefinedIn
+// checks the caller is a REAL member of that compound group — a
+// FieldAgent-only user can't forge their way past this by lying about the
+// field's value, since the check is real Cognito group membership, not
+// trust in what the client claims. read stays on
+// groupDefinedIn('partyClientId') since every role in the matrix needs
+// tenant-scoped read (FieldAgent's "view own pending" is about the local,
+// unsynced IndexedDB queue, not this table).
+//
+// Known residual gap (documented, not fixed here): groupDefinedIn only
+// checks that the caller is a REAL member of whatever group name is IN
+// the field — it has no idea the field is "supposed to" hold a
+// FieldAgent-suffixed value on this model and a Reviewer-suffixed value
+// on SubmissionCorrection below. Amplify Gen 2's declarative authorization
+// has no AND/cross-field/per-model value constraint to close this
+// (confirmed against @aws-amplify/data-schema's own types during the
+// Lambda-authorizer attempt referenced above). Going through the real app
+// (src/sync/amplifyClient.js) this can't be triggered: createSubmission()
+// always hardcodes `${partyClientId}__FieldAgent` and createCorrection()
+// always hardcodes `${partyClientId}__Reviewer`, regardless of caller. But
+// a caller hitting AppSync directly (bypassing the UI/client entirely, the
+// same threat model this whole rule exists to defend against) who is
+// honestly a member of SOME compound group for the party — e.g. a real
+// FieldAgent — could set requiredCreatorGroup to their OWN group on a
+// SubmissionCorrection create and be authorized, escalating past the
+// FieldAgent/Reviewer boundary the role matrix intends. Closing this for
+// real requires moving the write behind a custom-business-logic mutation
+// (a Lambda-backed resolver, NOT an authorizer — no auth-mode conflict,
+// since it runs inside the existing userPool-authenticated request) that
+// computes/checks this field server-side instead of trusting client input
+// for it. Not built here: bigger scope than asked for this pass, and would
+// also mean reimplementing create()'s attribute_not_exists(id) idempotency
+// by hand. Flag to the user before relying on this as airtight.
+//
 // validationSeverity/validationChecks are left nullable and are NOT
 // written by the client. Duplicate detection needs visibility across all
 // of a party client's submissions, which no single agent's device has —
@@ -50,8 +94,15 @@ const schema = a.schema({
       clientTimestamp: a.float(),
       validationSeverity: a.string(), // 'ok' | 'info' | 'unknown' | 'warning' | 'error' — see note above
       validationChecks: a.json(),
+      // Client sets this to `${partyClientId}__FieldAgent` — see the
+      // authorization comment above for why this field exists and why a
+      // client can't forge its way past the check by lying about it.
+      requiredCreatorGroup: a.string().required(),
     })
-    .authorization((allow) => [allow.groupDefinedIn('partyClientId').to(['create', 'read'])])
+    .authorization((allow) => [
+      allow.groupDefinedIn('partyClientId').to(['read']),
+      allow.groupDefinedIn('requiredCreatorGroup').to(['create']),
+    ])
     .secondaryIndexes((index) => [
       // Dashboard's "coverage / evidence / discrepancy queue" views list
       // one party client's submissions for one state at a time.
@@ -73,19 +124,24 @@ const schema = a.schema({
   // puCode-indexed duplicate detection) and not photo/GPS (not what a
   // "data-entry error" means here).
   //
-  // Enforcement note: this authorization rule only checks
-  // groupDefinedIn('partyClientId'), same as Submission — it does NOT
-  // restrict corrections to a privileged "reviewer" sub-role. Any signed-in
-  // member of a party client's Cognito group can call this create
-  // mutation directly, regardless of their custom:role. The UI (see
-  // src/ui/dashboard/CorrectionForm.jsx) only shows the control to
-  // custom:role=dashboard accounts, but that is a UI gate, not an
-  // access-control boundary — deliberate: the guarantee this model
-  // provides is "immutable original + full attribution + full audit
-  // trail," not "restricted to a privileged few." A truly enforced
-  // boundary would need a second Cognito group per party client, doubling
-  // the already-tedious "three touchpoints per new party client" cost
-  // documented in ../auth/resource.ts.
+  // Enforcement note: create requires the Reviewer role group AND
+  // membership in the record's own partyClientId group together
+  // (CLAUDE.md's "Role matrix"), via the same requiredCreatorGroup +
+  // groupDefinedIn mechanism as Submission above (see that model's
+  // authorization comment for why a custom Lambda authorizer was tried
+  // first and had to be abandoned). A FieldAgent, Coordinator, or
+  // PartyAdmin (even one correctly scoped to this party) is rejected by
+  // AppSync itself, not merely kept from seeing the "Request Correction"
+  // button in src/ui/dashboard/CorrectionForm.jsx. read stays on
+  // groupDefinedIn('partyClientId') — every role needs to see the audit
+  // trail, only Reviewer needs to add to it. Same residual gap as
+  // Submission's requiredCreatorGroup (see that comment): this only
+  // blocks a FieldAgent/Coordinator/PartyAdmin who is honest about which
+  // group they're claiming. A caller bypassing the UI who dishonestly
+  // sets this field to a real group they belong to (their own, not
+  // Reviewer) is not caught by groupDefinedIn alone — not exploitable
+  // through this app's own client code, which hardcodes the correct
+  // value, but not airtight against a direct API call either.
   SubmissionCorrection: a
     .model({
       submissionId: a.string().required(),
@@ -103,8 +159,14 @@ const schema = a.schema({
       correctedPartyVotes: a.json().required(),
       validationSeverity: a.string(), // server-populated, same pattern as Submission
       validationChecks: a.json(), // server-populated
+      // Client sets this to `${partyClientId}__Reviewer` — see
+      // Submission.requiredCreatorGroup above for the full reasoning.
+      requiredCreatorGroup: a.string().required(),
     })
-    .authorization((allow) => [allow.groupDefinedIn('partyClientId').to(['create', 'read'])])
+    .authorization((allow) => [
+      allow.groupDefinedIn('partyClientId').to(['read']),
+      allow.groupDefinedIn('requiredCreatorGroup').to(['create']),
+    ])
     .secondaryIndexes((index) => [
       // Dashboard fetches all of a party client's corrections for a state
       // in one query, then groups by submissionId client-side — same
