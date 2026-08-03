@@ -154,7 +154,14 @@ const schema = a.schema({
       // session-attributed, matching CLAUDE.md's "never anonymous" for
       // the flow whose entire purpose is auditability.
       reviewerId: a.string().required(),
-      reviewerNote: a.string().required(),
+      // required() alone only rejects null/absent, not an empty string — a
+      // verification script confirmed reviewerNote: '' was accepted before
+      // this. minLength() is AppSync's own Validate Transformer (real
+      // server-side enforcement, generated into the resolver pipeline, not
+      // a client SDK check) rejecting the create() itself, so a caller
+      // bypassing the UI's `.trim()` guard can no longer get an unreasoned
+      // Correction through.
+      reviewerNote: a.string().required().validate((v) => v.minLength(1, 'A reason is required for every correction.')),
       previousPartyVotes: a.json().required(),
       correctedPartyVotes: a.json().required(),
       validationSeverity: a.string(), // server-populated, same pattern as Submission
