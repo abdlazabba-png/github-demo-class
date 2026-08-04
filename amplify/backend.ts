@@ -8,6 +8,7 @@ import { data } from './data/resource.js';
 import { storage } from './storage/resource.js';
 import { validateSubmission } from './functions/validate-submission/resource.js';
 import { postConfirmation } from './auth/post-confirmation/resource.js';
+import { createRoleCheckedRecord } from './functions/create-role-checked-record/resource.js';
 
 const backend = defineBackend({
   auth,
@@ -15,6 +16,7 @@ const backend = defineBackend({
   storage,
   validateSubmission,
   postConfirmation,
+  createRoleCheckedRecord,
 });
 
 // Wires the DynamoDB Streams -> Lambda validation pipeline
@@ -104,3 +106,19 @@ backend.postConfirmation.resources.lambda.addToRolePolicy(
     resources: [`arn:aws:cognito-idp:${authStack.region}:${authStack.account}:userpool/*`],
   })
 );
+
+// create-role-checked-record (amplify/functions/create-role-checked-record/)
+// backs the fileSubmission/fileCorrection custom mutations
+// (amplify/data/resource.ts) — the fix for the residual gap
+// requiredCreatorGroup left open (see that file's history comment). Safe
+// to use the standard high-level `.grantWriteData()` here, unlike
+// party-role-authorizer's abandoned ARN-based wiring above: this
+// function's resourceGroupName is 'data' (see its resource.ts), so it
+// shares a CloudFormation stack with these tables — an intra-stack
+// reference, not a cross-stack one, so it can't form the same
+// data<->function circular dependency that hit the authorizer twice.
+const createRecordLambda = backend.createRoleCheckedRecord.resources.lambda;
+submissionTable.grantWriteData(createRecordLambda);
+correctionTable.grantWriteData(createRecordLambda);
+backend.createRoleCheckedRecord.addEnvironment('SUBMISSION_TABLE_NAME', submissionTable.tableName);
+backend.createRoleCheckedRecord.addEnvironment('CORRECTION_TABLE_NAME', correctionTable.tableName);

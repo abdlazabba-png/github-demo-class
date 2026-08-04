@@ -15,9 +15,10 @@ const ROLES = ['FieldAgent', 'Coordinator', 'Reviewer', 'PartyAdmin'];
 // entirely and only ever gated one UI affordance).
 //
 // This hook only decides what the UI shows for the CURRENTLY VIEWED party
-// client — amplify/data/resource.ts's groupDefinedIn('requiredCreatorGroup')
-// rule is what actually enforces it; AppSync rejects a create() call
-// regardless of what this hook returns.
+// client — amplify/functions/create-role-checked-record/handler.ts is what
+// actually enforces it, checking the caller's real Cognito group
+// membership before a fileSubmission/fileCorrection mutation is allowed to
+// write anything, regardless of what this hook returns.
 export function useMyRoleGroups(partyClientId) {
   const [state, setState] = useState({ loading: true, roles: [], error: null });
 

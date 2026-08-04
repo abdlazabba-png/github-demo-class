@@ -35,8 +35,9 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
   // scoped, so this hook takes partyClientId and re-checks whenever the
   // "Viewing as" selector changes. This UI gate mirrors a real
   // access-control boundary now enforced server-side by
-  // amplify/data/resource.ts's groupDefinedIn('requiredCreatorGroup')
-  // rule, not just a hidden button), and reviewerId is what actually gets
+  // amplify/functions/create-role-checked-record/handler.ts (invoked via
+  // the fileCorrection mutation), not just a hidden button), and
+  // reviewerId is what actually gets
   // written onto a correction, always the signed-in user's own email,
   // never a typed field.
   const { roles: myRoles } = useMyRoleGroups(partyClientId);

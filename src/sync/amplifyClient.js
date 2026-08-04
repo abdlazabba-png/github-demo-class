@@ -78,7 +78,16 @@ export async function createSubmission(record) {
     }
   }
 
-  const result = await client.models.Submission.create({
+  // The model's own createSubmission mutation is permanently unreachable
+  // (see amplify/data/resource.ts's authorization history) — this custom
+  // mutation is the only path, and it checks the caller's REAL Cognito
+  // group membership server-side in
+  // amplify/functions/create-role-checked-record/handler.ts rather than
+  // trusting anything this call supplies. A create() whose id already
+  // exists is treated as a successful idempotent resend by that Lambda
+  // itself now (see its own comment), not by string-matching an error
+  // message here the way this used to work.
+  const result = await client.mutations.fileSubmission({
     id: record.id, // client-generated UUID, same idempotency key SyncQueue already relies on
     partyClientId,
     stateCode,
@@ -95,23 +104,10 @@ export async function createSubmission(record) {
     deviceId,
     submissionHash: record.submissionHash,
     clientTimestamp: timestamp,
-    // CLAUDE.md's "Role matrix": only the FieldAgent role may create
-    // Submissions — enforced by amplify/data/resource.ts's
-    // groupDefinedIn('requiredCreatorGroup') rule checking real Cognito
-    // group membership, not by trusting this string. A caller who isn't
-    // actually in this compound group gets rejected by AppSync itself.
-    requiredCreatorGroup: `${partyClientId}__FieldAgent`,
   });
 
   if (result.errors?.length) {
-    // A create() whose id already exists fails DynamoDB's conditional
-    // PutItem (attribute_not_exists(id)) — that's an idempotent resend
-    // after a crash/restart (see src/sync/syncQueue.js), not a real
-    // failure, so it's treated as success exactly like mockServer.js did.
-    const alreadyExists = result.errors.some((e) => /conditional/i.test(e.message || ''));
-    if (!alreadyExists) {
-      throw new Error(result.errors.map((e) => e.message).join('; '));
-    }
+    throw new Error(result.errors.map((e) => e.message).join('; '));
   }
 }
 
@@ -163,7 +159,15 @@ export async function createCorrection({
   reviewerId,
   reviewerNote,
 }) {
-  const result = await client.models.SubmissionCorrection.create({
+  // The model's own createSubmissionCorrection mutation is permanently
+  // unreachable, same as Submission's (see amplify/data/resource.ts's
+  // authorization history) — this custom mutation is the only path, and
+  // it checks the caller's REAL Cognito Reviewer-group membership
+  // server-side in
+  // amplify/functions/create-role-checked-record/handler.ts, including
+  // the non-empty reviewerNote check that model field's own Validate
+  // Transformer can't reach for this path.
+  const result = await client.mutations.fileCorrection({
     submissionId,
     partyClientId,
     stateCode,
@@ -172,9 +176,6 @@ export async function createCorrection({
     reviewerNote,
     previousPartyVotes: JSON.stringify(previousPartyVotes),
     correctedPartyVotes: JSON.stringify(correctedPartyVotes),
-    // See createSubmission's requiredCreatorGroup comment above — same
-    // mechanism, Reviewer role instead of FieldAgent.
-    requiredCreatorGroup: `${partyClientId}__Reviewer`,
   });
   if (result.errors?.length) {
     throw new Error(result.errors.map((e) => e.message).join('; '));

@@ -7,9 +7,11 @@ import { useState } from 'react';
 // party) at the call site (src/ui/dashboard/DiscrepancyQueue.jsx), not
 // internally — but unlike the earlier custom:role gate this replaced,
 // that's now backed by real server-side enforcement:
-// amplify/data/resource.ts's groupDefinedIn('requiredCreatorGroup') rule
-// independently rejects the create() call for anyone not a real member of
-// `${partyClientId}__Reviewer`, regardless of what this component renders.
+// amplify/functions/create-role-checked-record/handler.ts (invoked via
+// the fileCorrection mutation) independently rejects the call for anyone
+// not a real member of `${partyClientId}__Reviewer`, checked against the
+// caller's actual verified Cognito session — not a client-supplied field
+// — regardless of what this component renders.
 //
 // reviewerId is a prop, not a field in this form — it comes from the
 // caller's own signed-in session (user.signInDetails.loginId, threaded
