@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="shieldGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#274A80"/>
+      <stop offset="100%" stop-color="#152A4D"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Full-bleed background (OS applies its own mask shape on top) -->
+  <rect width="512" height="512" fill="#152A4D"/>
+
+  <!-- Shield, scaled and centered within the ~80% safe zone -->
+  <g transform="translate(256,262) scale(0.72) translate(-256,-256)">
+    <path d="M256 62
+             L392 108
+             V240
+             C392 336 336 404 256 442
+             C176 404 120 336 120 240
+             V108
+             Z"
+          fill="url(#shieldGrad2)"
+          stroke="#B08D57"
+          stroke-width="12"/>
+    <path d="M182 260 L235 316 L336 196"
+          fill="none"
+          stroke="#B08D57"
+          stroke-width="36"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+</svg>

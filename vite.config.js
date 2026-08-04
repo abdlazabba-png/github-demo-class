@@ -20,13 +20,22 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
       manifest: {
-        name: 'Election Result Verification Platform',
-        short_name: 'ResultTracker',
+        name: 'VerifiVote',
+        short_name: 'VerifiVote',
         start_url: '/',
         display: 'standalone',
-        background_color: '#0b1220',
-        theme_color: '#0b1220',
-        icons: [],
+        background_color: '#FFFFFF',
+        theme_color: '#1F3864',
+        // From VerifiVote_Logo_Pack.zip's README.md — 'any' entries
+        // for standard home-screen icons, 'maskable' entries so Android
+        // adaptive icons don't clip the shield/checkmark under the OS's
+        // own circle/rounded/squircle mask.
+        icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
     }),
   ],

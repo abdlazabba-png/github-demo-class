@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220">
+  <defs>
+    <linearGradient id="shieldGrad3" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#274A80"/>
+      <stop offset="100%" stop-color="#152A4D"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon -->
+  <g transform="translate(20,10) scale(0.4)">
+    <rect width="512" height="512" rx="112" fill="#FFFFFF" stroke="#EDEDED" stroke-width="2"/>
+    <path d="M256 62
+             L392 108
+             V240
+             C392 336 336 404 256 442
+             C176 404 120 336 120 240
+             V108
+             Z"
+          fill="url(#shieldGrad3)"
+          stroke="#B08D57"
+          stroke-width="10"/>
+    <path d="M182 260 L235 316 L336 196"
+          fill="none"
+          stroke="#B08D57"
+          stroke-width="34"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="245" y="128" font-family="Georgia, 'Times New Roman', serif" font-size="72" font-weight="bold" fill="#1F3864">Verifi<tspan fill="#B08D57">Vote</tspan></text>
+  <text x="248" y="164" font-family="Arial, Helvetica, sans-serif" font-size="22" letter-spacing="3" fill="#595959">INDEPENDENT RESULT VERIFICATION</text>
+</svg>
