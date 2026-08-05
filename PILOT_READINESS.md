@@ -5,7 +5,12 @@ each item — most of this is **not** an engineering task, and this file exists
 so that's explicit rather than left implicit. Written 2026-07-30, after the
 core platform (auth, data, storage, server-side validation, group
 auto-assignment, CI/CD, budget monitoring) was built and verified end-to-end
-against the real AWS backend.
+against the real AWS backend. **Refreshed 2026-08-04** after the role-group
+access-control model (FieldAgent/Coordinator/Reviewer/PartyAdmin), two real
+access-control gaps found and closed, and the VerifiVote branding/PWA
+installability wiring — see "Already done and verified" below for what
+changed and why the "UI-only enforcement" caveat that used to be here is
+gone.
 
 ## The sandbox and the deployed (Amplify Hosting) backend are separate
 
@@ -30,7 +35,22 @@ Practical consequences:
   opposed to a real sign-up/confirm flow) does **not** fire the
   `PostConfirmation` group-auto-assignment trigger — group membership must be
   set explicitly with `admin-add-user-to-group` for accounts provisioned this
-  way, in either backend.
+  way, in either backend. Since the role-group work (below), this now means
+  **two** groups per test account — the tenant group (`party-demo-alpha`)
+  and a compound role group (`party-demo-alpha__FieldAgent`, `__Reviewer`,
+  `__Coordinator`, or `__PartyAdmin`) — not just one.
+- **A related but distinct caching gotcha, found 2026-08-04**: right after a
+  successful `pipeline-deploy`, a plain (non-cache-busted) request to a
+  static asset like `manifest.webmanifest` can still return the *previous*
+  deploy's content for a few minutes. Not a failed deploy — Amplify
+  Hosting's CDN sets `s-maxage=31536000` on static assets, and a specific
+  already-cached URL can take a short while to propagate an invalidation
+  across edges after a new deploy, even though the origin already has the
+  new content. Confirmed by fetching the same URL with `{cache: 'no-store'}`
+  and a cache-busting query string, which returned the correct new content
+  immediately. If a just-deployed change looks stale in a browser, re-check
+  with a cache-busting fetch before assuming the deploy or the code is
+  wrong.
 
 ## Operational — not something I can do
 
@@ -60,6 +80,12 @@ Practical consequences:
 - [ ] **Revisit the $20/month AWS budget** before real use — that threshold
   was set for this dev/test phase. CLAUDE.md's own estimate is "tens of
   dollars per state per election cycle" for real usage.
+- [ ] **Test installability on a real low-end Android device.** CLAUDE.md's
+  installability requirement explicitly calls for this — "simulated and
+  real conditions" can differ, especially for maskable-icon rendering and
+  the install-prompt UX. The manifest/icons (2026-08-04, see below) have
+  only been verified in a desktop browser and via direct HTTP checks
+  against the deployed manifest/icon files — never on an actual phone.
 
 ## Product/design decisions — need your call, not just code
 
@@ -97,6 +123,27 @@ Practical consequences:
   Minor hygiene issue flagged during the security review — a crash
   mid-run currently leaves synthetic test records in the real table
   instead of guaranteeing cleanup.
+- [ ] **Coordinator has no UI for "flag issues."** CLAUDE.md's role matrix
+  (`Coordinator: ... flag issues; cannot edit vote figures directly`) grants
+  this permission, but no flagging flow or backend model for it was ever
+  built. Today Coordinator/PartyAdmin accounts get read-only dashboard
+  access, same as everyone in the tenant — no functionality distinguishes
+  them from each other yet, only from FieldAgent (can't create Submissions)
+  and Reviewer (can't create Corrections).
+- [ ] **Per-agent PU assignment / per-coordinator LGA-ward assignment.** The
+  role matrix scopes FieldAgent to "assigned PU(s) only" and Coordinator to
+  "their LGA/ward" — narrower than what's enforced today. No data model
+  exists for per-agent PU assignment or per-coordinator LGA/ward
+  assignment; every role gets tenant-wide read within their party client.
+  Building the assignment model is a real feature, not a quick fix — it
+  needs its own admin UI (who assigns agents to PUs, and where) before the
+  access-control side is even worth tightening.
+- [ ] **`REVIEWER_CORRECTION_FLOW_SPEC.md` is stale.** Its data-model
+  section still describes a `Correction` type (`correctedFields`,
+  `originalSnapshot`, `flagType`) that was never built — the real,
+  deployed `SubmissionCorrection` model is narrower (`partyVotes` only).
+  The spec's access-control and UI sections are accurate; only that one
+  section needs a rewrite pass so a future reader isn't misled by it.
 
 ## Already done and verified
 
@@ -122,43 +169,84 @@ flow only") is built and verified end-to-end against **both** the sandbox
 and the deployed Amplify Hosting backend (separate backends, see above) —
 see `amplify/data/resource.ts`'s `SubmissionCorrection` model,
 `amplify/functions/validate-submission/handler.ts`'s second Streams source,
-`src/ui/dashboard/CorrectionForm.jsx`/`CorrectionHistory.jsx`, and
-`src/auth/useMyRole.js`. A `Submission` row is never mutated; a correction
-is a new, attributed (real signed-in email, never typed), reasoned,
-immutable record layered on top, server-validated the same way the
-original submission is. Verified live on each backend: filed a correction
-on a real implausible submission (severity flipped from `error` to `ok` on
-the correction, computed by the Lambda, not the client), confirmed the
-original discrepancy stays listed with a "corrected" badge rather than
-disappearing, confirmed both entries appear in the Audit Log correctly
-attributed and chronologically ordered, and confirmed AppSync rejects a
-cross-tenant query for the new model exactly as it does for `Submission`.
-Correction chaining (a second correction's "previous" value coming from
-the first correction's new value, not the original) was verified on the
-sandbox. Test data from both verification passes has been deleted from
-both backends' tables.
+and `src/ui/dashboard/CorrectionForm.jsx`/`CorrectionHistory.jsx`. A
+`Submission` row is never mutated; a correction is a new, attributed (real
+signed-in email, never typed), reasoned, immutable record layered on top,
+server-validated the same way the original submission is. Verified live on
+each backend: filed a correction on a real implausible submission (severity
+flipped from `error` to `ok` on the correction, computed by the Lambda, not
+the client), confirmed the original discrepancy stays listed with a
+"corrected" badge rather than disappearing, confirmed both entries appear
+in the Audit Log correctly attributed and chronologically ordered, and
+confirmed AppSync rejects a cross-tenant query for the new model exactly as
+it does for `Submission`. Correction chaining (a second correction's
+"previous" value coming from the first correction's new value, not the
+original) was verified on the sandbox. Test data from both verification
+passes has been deleted from both backends' tables.
 
-One live-testing gotcha worth remembering: after changing a user's
-`custom:role` via `admin-update-user-attributes`, an already-open browser
-tab needs a full page reload, not just an in-app sign-out/sign-in, to pick
-up the new claim — the in-SPA re-login reused a cached session token.
+**Role-group access control (2026-08-03 / 2026-08-04), replacing the old
+`custom:role` UI-only gate entirely.** CLAUDE.md's role matrix
+(FieldAgent/Coordinator/Reviewer/PartyAdmin) is now real, party-scoped
+Cognito group membership (`amplify/auth/resource.ts`'s compound groups,
+`${partyClientId}__${role}`), read via `src/auth/useMyRoleGroups.js`. This
+directly resolves the "Enforcement is UI-only" design call this file used
+to flag as an open question — it's no longer open. Two real gaps were
+found and closed along the way, not just theorized:
+- **A Lambda-authorizer approach was tried first and is not viable on this
+  API** — AppSync classifies a genuine Cognito access token as `userPool`
+  auth unconditionally, before checking any field-level `@aws_lambda`
+  directive, so a signed-in user's own token can never route through a
+  custom authorizer here. Confirmed live (direct Lambda invoke succeeded,
+  raw `curl` straight to AppSync never even reached the function) before
+  abandoning it for compound groups instead.
+- **A client-supplied `requiredCreatorGroup` field could be honestly
+  misclaimed.** `groupDefinedIn` only checks the caller is a real member of
+  *whatever group name is in the field* — it couldn't tell "the group this
+  operation requires" from "any group I honestly belong to," so a real
+  FieldAgent could claim their own group on a `SubmissionCorrection` create
+  and be authorized. Confirmed empirically, then closed for real: creation
+  now goes entirely through two custom mutations
+  (`fileSubmission`/`fileCorrection`) backed by
+  `amplify/functions/create-role-checked-record/handler.ts`, which checks
+  the caller's REAL Cognito group membership (`event.identity.groups`,
+  populated by AppSync itself) — there is no client-supplied field left to
+  misclaim. The model's own `create` mutations are now permanently
+  unreachable, same as `update`/`delete` always were.
+- **`reviewerNote: ''` was accepted** — `a.string().required()` only
+  rejects null/absent, not empty. Closed with a `minLength(1)` Validate
+  Transformer rule (real server-side enforcement) plus a matching check in
+  the Lambda above (the transformer doesn't reach custom-mutation
+  arguments).
 
-Two design calls were made without an explicit answer from you (asked, no
-response came through — proceeded with the stated recommendation in each
-case; flagging clearly here since these are real tradeoffs, not settled
-facts):
-- **Enforcement is UI-only, not an access-control boundary.** Any signed-in
-  member of a party's Cognito group can technically call the correction
-  mutation directly; the UI only shows "Request Correction" to
-  `custom:role=dashboard` accounts. The guarantee is "immutable original +
-  full attribution + full audit trail," not "restricted to a privileged
-  few." Documented directly in `amplify/data/resource.ts`'s
-  `SubmissionCorrection` comment. A real enforced boundary would need a
-  second Cognito group per party client.
+All three were verified against the real, live sandbox AND production APIs
+(not just typechecked) — see commit history (`git log --oneline` around
+2026-08-03/04) for the specific scripted and browser-driven checks run
+against each. Test accounts and records created for production
+verification were deleted afterward; production Cognito pool and DynamoDB
+tables were confirmed clean.
+
+**VerifiVote branding / PWA installability (2026-08-04).** The manifest's
+`icons: []` placeholder (present since installability was first added to
+this checklist) is filled in — real icons at all standard sizes plus
+maskable variants, app renamed from the placeholder "Election Result
+Verification Platform" / "ResultTracker" to "VerifiVote" in the manifest,
+apple-touch-icon and favicon `<link>` tags added to `index.html`. Verified
+in a desktop browser (icons load, no console errors) and via direct HTTP
+checks against the deployed manifest/icon files — **not yet on a real
+device**, see the Operational section above.
+
+One live-testing gotcha worth remembering (from before the role-group
+work, may still apply to other custom Cognito attributes): after changing
+a user attribute via `admin-update-user-attributes`, an already-open
+browser tab needs a full page reload, not just an in-app sign-out/sign-in,
+to pick up the new claim — the in-SPA re-login reused a cached session
+token.
+
+One design call from the original version of this file is still genuinely
+open (not resolved by the role-group work above):
 - **Single-actor, immediate correction — no two-person approval step.** One
-  dashboard-role user files a correction with a mandatory reason; that
+  Reviewer-role user files a correction with a mandatory reason; that
   itself is treated as "the logged reviewer flow." Not built: a
-  propose/approve two-actor workflow with a pending state.
-
-If either of these should actually be the enforced/two-actor version, that's
-a real follow-up, not a bug — say so and it can be built.
+  propose/approve two-actor workflow with a pending state. If this should
+  actually be the two-actor version, that's a real follow-up, not a bug —
+  say so and it can be built.
