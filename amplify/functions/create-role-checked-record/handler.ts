@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 
-// See resource.ts for why this exists. Two custom mutations
-// (fileSubmission/fileCorrection) share this one function, mirroring the
-// existing validate-submission precedent of one Lambda handling both
-// models rather than two functions with duplicated wiring.
+// See resource.ts for why this exists. Three custom mutations
+// (fileSubmission/fileCorrection/fileFlag) share this one function,
+// mirroring the existing validate-submission precedent of one Lambda
+// handling multiple models rather than one function per model.
 //
 // The invocation event shape here is Amplify Gen2's own
 // function-backed-custom-mutation payload, confirmed live by a one-time
@@ -17,7 +17,7 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 // what makes the whole fix work: nothing here reads a client-supplied
 // field to decide who the caller is.
 type CreateRecordEvent = {
-  fieldName: 'fileSubmission' | 'fileCorrection';
+  fieldName: 'fileSubmission' | 'fileCorrection' | 'fileFlag';
   identity?: { groups?: string[] | null };
   arguments: Record<string, unknown>;
 };
@@ -27,6 +27,7 @@ const docClient = DynamoDBDocumentClient.from(client);
 
 const SUBMISSION_TABLE_NAME = process.env.SUBMISSION_TABLE_NAME as string;
 const CORRECTION_TABLE_NAME = process.env.CORRECTION_TABLE_NAME as string;
+const FLAG_TABLE_NAME = process.env.FLAG_TABLE_NAME as string;
 
 // AWSJSON arguments have gone through both shapes elsewhere in this
 // codebase depending on the resolver path (see validate-submission's own
@@ -70,6 +71,15 @@ type FileCorrectionArgs = {
   reviewerNote: string;
   previousPartyVotes: unknown;
   correctedPartyVotes: unknown;
+};
+
+type FileFlagArgs = {
+  submissionId: string;
+  partyClientId: string;
+  stateCode: string;
+  puCode: string;
+  coordinatorId: string;
+  note: string;
 };
 
 async function fileSubmission(args: FileSubmissionArgs, groups: string[]) {
@@ -171,6 +181,42 @@ async function fileCorrection(args: FileCorrectionArgs, groups: string[]) {
   return item;
 }
 
+async function fileFlag(args: FileFlagArgs, groups: string[]) {
+  const requiredGroup = `${args.partyClientId}__Coordinator`;
+  if (!groups.includes(requiredGroup)) {
+    throw new Error(`Not authorized: filing a flag requires ${requiredGroup} membership.`);
+  }
+  // Same reasoning as fileCorrection's reviewerNote check above — custom
+  // mutation arguments don't run through the model field's minLength(1)
+  // Validate Transformer, so this is the only place actually enforcing it.
+  if (!args.note || !args.note.trim()) {
+    throw new Error('A reason is required for every flag.');
+  }
+
+  const now = new Date().toISOString();
+  const item = {
+    __typename: 'SubmissionFlag',
+    id: randomUUID(),
+    submissionId: args.submissionId,
+    partyClientId: args.partyClientId,
+    stateCode: args.stateCode,
+    puCode: args.puCode,
+    coordinatorId: args.coordinatorId,
+    note: args.note,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await docClient.send(
+    new PutCommand({
+      TableName: FLAG_TABLE_NAME,
+      Item: item,
+    })
+  );
+
+  return item;
+}
+
 export const handler = async (event: CreateRecordEvent) => {
   const groups = event.identity?.groups || [];
 
@@ -179,6 +225,8 @@ export const handler = async (event: CreateRecordEvent) => {
       return fileSubmission(event.arguments as unknown as FileSubmissionArgs, groups);
     case 'fileCorrection':
       return fileCorrection(event.arguments as unknown as FileCorrectionArgs, groups);
+    case 'fileFlag':
+      return fileFlag(event.arguments as unknown as FileFlagArgs, groups);
     default:
       throw new Error(`create-role-checked-record: unknown operation ${event.fieldName}`);
   }

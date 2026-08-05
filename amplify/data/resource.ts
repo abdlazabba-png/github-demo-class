@@ -165,7 +165,55 @@ const schema = a.schema({
       index('partyClientId').sortKeys(['stateCode']).queryField('listCorrectionsByPartyClientAndState'),
     ]),
 
-  // The only path left to create either model above. `allow.authenticated()`
+  // The Coordinator flow (CLAUDE.md's role matrix: Coordinator can "view
+  // coverage & submissions for their agents; flag issues; cannot edit vote
+  // figures directly"). A flag is a lightweight, attributed, permanent
+  // annotation on a submission — never a vote-value change, so it's a
+  // separate model from SubmissionCorrection, not a variant of it. Unlike
+  // a Correction, a flag doesn't require the submission to already be
+  // algorithmically discrepant: the whole point of a human Coordinator
+  // flagging something is to catch what OCR-mismatch/plausibility/
+  // duplicate checks miss (see amplifyClient.js's getDiscrepanciesForClient,
+  // which surfaces a submission if it has either a warning/error severity
+  // OR at least one flag). Matches CLAUDE.md's Reviewer permission
+  // ("Create Corrections on flagged or manually-identified submissions") —
+  // a flag is meant to feed a Reviewer's queue, not resolve anything
+  // itself.
+  //
+  // No update/delete, same append-only reasoning as Submission/
+  // SubmissionCorrection above: a flag that turns out to be unfounded
+  // isn't edited or removed, it just sits in the history — same as an
+  // "ok" validation check sitting next to a real one. Multiple flags per
+  // submission (from the same or different Coordinators) are allowed and
+  // all kept, not deduplicated or replaced.
+  //
+  // Creation goes through the fileFlag custom mutation below, same
+  // create-role-checked-record mechanism as Submission/SubmissionCorrection
+  // — checking real `${partyClientId}__Coordinator` membership, not a
+  // client-supplied field. read stays on groupDefinedIn('partyClientId'):
+  // every role needs to see flags as part of the audit trail, only
+  // Coordinator needs to add them.
+  SubmissionFlag: a
+    .model({
+      submissionId: a.string().required(),
+      partyClientId: a.string().required(), // denormalized: needed for the auth rule itself
+      stateCode: a.string().required(), // denormalized: needed for the index
+      puCode: a.string().required(), // denormalized: shown in the queue without a join
+      // Signed-in user's email, set by the client from the auth session —
+      // never a typed form field, same session-attribution pattern as
+      // SubmissionCorrection.reviewerId.
+      coordinatorId: a.string().required(),
+      note: a.string().required().validate((v) => v.minLength(1, 'A reason is required for every flag.')),
+    })
+    .authorization((allow) => [allow.groupDefinedIn('partyClientId').to(['read'])])
+    .secondaryIndexes((index) => [
+      // Same shape as SubmissionCorrection's index — dashboard fetches all
+      // of a party client's flags for a state in one query, then groups by
+      // submissionId client-side.
+      index('partyClientId').sortKeys(['stateCode']).queryField('listFlagsByPartyClientAndState'),
+    ]),
+
+  // The only path left to create any of the three models above. `allow.authenticated()`
   // is deliberately coarse (any signed-in user can attempt the call) —
   // create-role-checked-record/handler.ts is what actually checks the
   // caller's REAL Cognito group membership against
@@ -215,6 +263,24 @@ const schema = a.schema({
       correctedPartyVotes: a.json().required(),
     })
     .returns(a.ref('SubmissionCorrection'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(createRoleCheckedRecord)),
+
+  // The Coordinator flow's only path to create a flag — see
+  // SubmissionFlag's authorization comment above. Returns
+  // a.ref('SubmissionFlag') because amplifyClient.js's createFlag() reads
+  // the response the same way createCorrection() does.
+  fileFlag: a
+    .mutation()
+    .arguments({
+      submissionId: a.string().required(),
+      partyClientId: a.string().required(),
+      stateCode: a.string().required(),
+      puCode: a.string().required(),
+      coordinatorId: a.string().required(),
+      note: a.string().required(),
+    })
+    .returns(a.ref('SubmissionFlag'))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(createRoleCheckedRecord)),
 });

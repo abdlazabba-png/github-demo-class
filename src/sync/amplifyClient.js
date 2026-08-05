@@ -192,52 +192,120 @@ export async function getCorrectionsForClient(partyClientId, stateCode) {
   return data.map(toCorrectionShape).sort((a, b) => a.createdAt - b.createdAt);
 }
 
-// Shared merge point so no view reimplements the submission<->correction
-// join. Attaches, per submission: `corrections` (oldest -> newest) and
-// `effectivePartyVotes` (the latest correction's value, or the original
-// if none) — corrections chain, so a second correction's "previous" value
-// is the first correction's new value, not the original submission's;
-// that falls out naturally here since effectivePartyVotes always reflects
-// the last item in the (already-sorted) chain.
-export async function getSubmissionsWithCorrectionsForClient(partyClientId, stateCode) {
-  const [submissions, corrections] = await Promise.all([
+function toFlagShape(record) {
+  return {
+    id: record.id,
+    submissionId: record.submissionId,
+    coordinatorId: record.coordinatorId,
+    note: record.note,
+    createdAt: record.createdAt ? new Date(record.createdAt).getTime() : Date.now(),
+  };
+}
+
+// The Coordinator flow (CLAUDE.md's role matrix: Coordinator can "flag
+// issues; cannot edit vote figures directly"). A flag never touches
+// partyVotes — see amplify/data/resource.ts's SubmissionFlag comment for
+// why it's a separate model from SubmissionCorrection rather than a
+// variant of it. coordinatorId must come from the caller's own auth
+// session (src/ui/dashboard/PartyDashboard.jsx passes it down the same way
+// reviewerId already is), never a typed field, for the same
+// session-attribution reason as createCorrection.
+export async function createFlag({ submissionId, partyClientId, stateCode, puCode, coordinatorId, note }) {
+  // The model's own createSubmissionFlag mutation is permanently
+  // unreachable, same as Submission's/SubmissionCorrection's (see
+  // amplify/data/resource.ts's authorization history) — this custom
+  // mutation is the only path, and it checks the caller's REAL Cognito
+  // Coordinator-group membership server-side in
+  // amplify/functions/create-role-checked-record/handler.ts.
+  const result = await client.mutations.fileFlag({
+    submissionId,
+    partyClientId,
+    stateCode,
+    puCode,
+    coordinatorId,
+    note,
+  });
+  if (result.errors?.length) {
+    throw new Error(result.errors.map((e) => e.message).join('; '));
+  }
+  return toFlagShape(result.data);
+}
+
+export async function getFlagsForClient(partyClientId, stateCode) {
+  const { data, errors } = await client.models.SubmissionFlag.listFlagsByPartyClientAndState({
+    partyClientId,
+    stateCode: { eq: stateCode },
+  });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join('; '));
+  return data.map(toFlagShape).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+// Shared merge point so no view reimplements the submission<->correction/
+// flag joins. Attaches, per submission: `corrections` (oldest -> newest),
+// `flags` (oldest -> newest), and `effectivePartyVotes` (the latest
+// correction's value, or the original if none) — corrections chain, so a
+// second correction's "previous" value is the first correction's new
+// value, not the original submission's; that falls out naturally here
+// since effectivePartyVotes always reflects the last item in the
+// (already-sorted) chain. Flags never affect effectivePartyVotes — they're
+// a signal for a Reviewer to look, not a value change themselves.
+export async function getSubmissionsWithHistoryForClient(partyClientId, stateCode) {
+  const [submissions, corrections, flags] = await Promise.all([
     getSubmissionsForClient(partyClientId, stateCode),
     getCorrectionsForClient(partyClientId, stateCode),
+    getFlagsForClient(partyClientId, stateCode),
   ]);
 
-  const bySubmissionId = new Map();
+  const correctionsBySubmissionId = new Map();
   for (const correction of corrections) {
-    const list = bySubmissionId.get(correction.submissionId) || [];
+    const list = correctionsBySubmissionId.get(correction.submissionId) || [];
     list.push(correction);
-    bySubmissionId.set(correction.submissionId, list);
+    correctionsBySubmissionId.set(correction.submissionId, list);
+  }
+
+  const flagsBySubmissionId = new Map();
+  for (const flag of flags) {
+    const list = flagsBySubmissionId.get(flag.submissionId) || [];
+    list.push(flag);
+    flagsBySubmissionId.set(flag.submissionId, list);
   }
 
   return submissions.map((s) => {
-    const ownCorrections = bySubmissionId.get(s.id) || [];
+    const ownCorrections = correctionsBySubmissionId.get(s.id) || [];
     const latest = ownCorrections[ownCorrections.length - 1];
     return {
       ...s,
       corrections: ownCorrections,
+      flags: flagsBySubmissionId.get(s.id) || [],
       effectivePartyVotes: latest ? latest.correctedPartyVotes : s.payload.partyVotes,
     };
   });
 }
 
+// A submission surfaces here if the automated checks flagged it (severity
+// warning/error) OR a Coordinator manually flagged it — the latter is the
+// whole point of the Coordinator role: catching what OCR-mismatch/
+// plausibility/duplicate checks miss (CLAUDE.md's Reviewer permission,
+// "Create Corrections on flagged or manually-identified submissions",
+// covers both sources the same way).
 export async function getDiscrepanciesForClient(partyClientId, stateCode) {
-  const all = await getSubmissionsWithCorrectionsForClient(partyClientId, stateCode);
-  return all.filter((r) => r.validation.overallSeverity === 'warning' || r.validation.overallSeverity === 'error');
+  const all = await getSubmissionsWithHistoryForClient(partyClientId, stateCode);
+  return all.filter(
+    (r) => r.validation.overallSeverity === 'warning' || r.validation.overallSeverity === 'error' || r.flags.length > 0
+  );
 }
 
 // Submissions are create+read only (amplify/data/resource.ts) — no update,
 // no delete — so the Submissions themselves already are an append-only
-// record of what was received, when, by whom. SubmissionCorrection is the
-// same shape for the reviewer/edit flow's actions. This merges both into
-// one chronological log rather than reading only Submission, now that a
-// reviewer/edit flow exists to log actions against.
+// record of what was received, when, by whom. SubmissionCorrection and
+// SubmissionFlag are the same shape for the reviewer/edit and Coordinator
+// flows' actions. This merges all three into one chronological log rather
+// than reading only Submission.
 export async function getAuditLogForClient(partyClientId, stateCode) {
-  const [submissions, corrections] = await Promise.all([
+  const [submissions, corrections, flags] = await Promise.all([
     getSubmissionsForClient(partyClientId, stateCode),
     getCorrectionsForClient(partyClientId, stateCode),
+    getFlagsForClient(partyClientId, stateCode),
   ]);
 
   const submissionEntries = submissions.map((r) => ({
@@ -263,5 +331,14 @@ export async function getAuditLogForClient(partyClientId, stateCode) {
     validationSeverity: c.validation.overallSeverity,
   }));
 
-  return [...submissionEntries, ...correctionEntries].sort((a, b) => a.at - b.at);
+  const flagEntries = flags.map((f) => ({
+    type: 'flag',
+    id: f.id,
+    submissionId: f.submissionId,
+    coordinatorId: f.coordinatorId,
+    note: f.note,
+    at: f.createdAt,
+  }));
+
+  return [...submissionEntries, ...correctionEntries, ...flagEntries].sort((a, b) => a.at - b.at);
 }

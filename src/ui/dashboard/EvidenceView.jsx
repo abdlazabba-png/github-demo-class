@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react';
 import { getUrl } from 'aws-amplify/storage';
 import CorrectionHistory from './CorrectionHistory.jsx';
+import FlagHistory from './FlagHistory.jsx';
+import FlagIssueForm from './FlagIssueForm.jsx';
 
 // Photos now live in S3 (amplify/storage/resource.ts) — the mock-server
 // phase's "not on this device" fallback for a locally-only photo no
 // longer applies now that any signed-in client can fetch the real object.
-function EvidenceRow({ submission }) {
+//
+// This is now a SECOND write-action surface (the Coordinator flow's "Flag
+// Issue" button), no longer purely read-only as the old comment here said.
+// That's deliberate, not a layering slip: a Coordinator's whole value is
+// catching what the automated OCR-mismatch/plausibility/duplicate checks
+// miss, so the flag action has to live wherever a Coordinator browses
+// EVERY submission — DiscrepancyQueue.jsx only ever shows submissions
+// already flagged or algorithmically discrepant, which would make it
+// impossible to flag anything new from there.
+function EvidenceRow({ server, submission, coordinatorId, myRoles, onFlagged }) {
   const [photoUrl, setPhotoUrl] = useState(null);
   const [checked, setChecked] = useState(false);
 
@@ -49,22 +60,25 @@ function EvidenceRow({ submission }) {
       ) : (
         <p className="hint">Loading photo…</p>
       )}
-      {/* Read-only here — the reviewer/edit flow's one write-action surface
-          is DiscrepancyQueue.jsx, not duplicated here. */}
       <CorrectionHistory corrections={submission.corrections} />
+      <FlagHistory flags={submission.flags} />
+      {myRoles.includes('Coordinator') && (
+        <FlagIssueForm server={server} submission={submission} coordinatorId={coordinatorId} onFiled={onFlagged} />
+      )}
     </li>
   );
 }
 
-export default function EvidenceView({ server, partyClientId, stateCode, refreshToken }) {
+export default function EvidenceView({ server, partyClientId, stateCode, refreshToken, coordinatorId, myRoles }) {
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState(null);
+  const [localRefresh, setLocalRefresh] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setError(null);
     server
-      .getSubmissionsWithCorrectionsForClient(partyClientId, stateCode)
+      .getSubmissionsWithHistoryForClient(partyClientId, stateCode)
       .then((subs) => {
         if (!cancelled) setSubmissions(subs);
       })
@@ -74,7 +88,7 @@ export default function EvidenceView({ server, partyClientId, stateCode, refresh
     return () => {
       cancelled = true;
     };
-  }, [server, partyClientId, stateCode, refreshToken]);
+  }, [server, partyClientId, stateCode, refreshToken, localRefresh]);
 
   return (
     <section className="dashboard-view evidence-view">
@@ -85,7 +99,14 @@ export default function EvidenceView({ server, partyClientId, stateCode, refresh
       )}
       <ul className="evidence-list">
         {submissions.map((s) => (
-          <EvidenceRow key={s.id} submission={s} />
+          <EvidenceRow
+            key={s.id}
+            server={server}
+            submission={s}
+            coordinatorId={coordinatorId}
+            myRoles={myRoles}
+            onFlagged={() => setLocalRefresh((t) => t + 1)}
+          />
         ))}
       </ul>
     </section>

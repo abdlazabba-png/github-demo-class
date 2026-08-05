@@ -123,13 +123,6 @@ Practical consequences:
   Minor hygiene issue flagged during the security review — a crash
   mid-run currently leaves synthetic test records in the real table
   instead of guaranteeing cleanup.
-- [ ] **Coordinator has no UI for "flag issues."** CLAUDE.md's role matrix
-  (`Coordinator: ... flag issues; cannot edit vote figures directly`) grants
-  this permission, but no flagging flow or backend model for it was ever
-  built. Today Coordinator/PartyAdmin accounts get read-only dashboard
-  access, same as everyone in the tenant — no functionality distinguishes
-  them from each other yet, only from FieldAgent (can't create Submissions)
-  and Reviewer (can't create Corrections).
 - [ ] **Per-agent PU assignment / per-coordinator LGA-ward assignment.** The
   role matrix scopes FieldAgent to "assigned PU(s) only" and Coordinator to
   "their LGA/ward" — narrower than what's enforced today. No data model
@@ -224,6 +217,35 @@ All three were verified against the real, live sandbox AND production APIs
 against each. Test accounts and records created for production
 verification were deleted afterward; production Cognito pool and DynamoDB
 tables were confirmed clean.
+
+**The Coordinator flow (2026-08-05).** CLAUDE.md's role matrix gives
+Coordinator "view coverage & submissions for their agents; flag issues;
+cannot edit vote figures directly" — the "flag issues" half had no backend
+model or UI until now. New `SubmissionFlag` model (create+read only, same
+append-only shape as `Submission`/`SubmissionCorrection` — no
+resolve/dismiss action, an unfounded flag just stays in the history same
+as an "ok" validation check does) plus a `fileFlag` custom mutation,
+reusing `create-role-checked-record`'s Lambda (checking real
+`${partyClientId}__Coordinator` membership, not a client-supplied field —
+built the right way from the start this time, not retrofitted like
+`requiredCreatorGroup` was). Deliberately a separate model from
+`SubmissionCorrection`, not a variant of it — a flag never touches
+`partyVotes`. The "Flag Issue" action lives in **both**
+`EvidenceView.jsx` (every submission, since a Coordinator's whole value is
+catching what the automated OCR-mismatch/plausibility/duplicate checks
+miss) and `DiscrepancyQueue.jsx` (add more context to something already
+flagged/discrepant); `getDiscrepanciesForClient` now surfaces a submission
+if it has warning/error severity **or** at least one flag, so a flag alone
+is enough to get a clean submission in front of a Reviewer — directly
+matching CLAUDE.md's Reviewer permission ("Create Corrections on flagged
+or manually-identified submissions"). Verified against the real sandbox
+API (10/10 scripted checks: Coordinator can flag, FieldAgent/cross-tenant
+Coordinator/empty-note all rejected, a submission with `ok` severity and
+one flag correctly surfaces in the discrepancy queue, flag entries appear
+in the audit log) and through the actual browser UI signed in as
+Coordinator (filed a flag via the real "Flag Issue" button) and Reviewer
+(confirmed the flag history renders but no "Flag Issue" button appears for
+a non-Coordinator role). Not yet committed/pushed/deployed to production.
 
 **VerifiVote branding / PWA installability (2026-08-04).** The manifest's
 `icons: []` placeholder (present since installability was first added to

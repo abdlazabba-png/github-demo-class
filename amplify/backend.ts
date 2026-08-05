@@ -122,3 +122,12 @@ submissionTable.grantWriteData(createRecordLambda);
 correctionTable.grantWriteData(createRecordLambda);
 backend.createRoleCheckedRecord.addEnvironment('SUBMISSION_TABLE_NAME', submissionTable.tableName);
 backend.createRoleCheckedRecord.addEnvironment('CORRECTION_TABLE_NAME', correctionTable.tableName);
+
+// The Coordinator flow's SubmissionFlag table (amplify/data/resource.ts) —
+// same intra-stack grant as the two tables above, and no DynamoDB Streams
+// wiring needed here unlike Submission/SubmissionCorrection: a flag has no
+// server-computed severity to fill in after insert, it's already a
+// complete, manually-authored signal.
+const flagTable = backend.data.resources.tables['SubmissionFlag'];
+flagTable.grantWriteData(createRecordLambda);
+backend.createRoleCheckedRecord.addEnvironment('FLAG_TABLE_NAME', flagTable.tableName);

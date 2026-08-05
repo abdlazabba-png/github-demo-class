@@ -29,19 +29,22 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
   const [stateCode, setStateCode] = useState(statesList()[0].code);
   const [activeTab, setActiveTab] = useState('coverage');
 
-  // The reviewer/edit flow (CorrectionForm.jsx) needs both of these:
-  // myRoles gates whether "Request Correction" is shown at all (Reviewer
-  // role WITHIN partyClientId, see useMyRoleGroups.js — role is party-
-  // scoped, so this hook takes partyClientId and re-checks whenever the
-  // "Viewing as" selector changes. This UI gate mirrors a real
-  // access-control boundary now enforced server-side by
+  // The reviewer/edit and Coordinator flows (CorrectionForm.jsx,
+  // FlagIssueForm.jsx) need both of these: myRoles gates whether "Request
+  // Correction"/"Flag Issue" are shown at all (Reviewer/Coordinator role
+  // WITHIN partyClientId, see useMyRoleGroups.js — role is party-scoped,
+  // so this hook takes partyClientId and re-checks whenever the "Viewing
+  // as" selector changes. This UI gate mirrors a real access-control
+  // boundary now enforced server-side by
   // amplify/functions/create-role-checked-record/handler.ts (invoked via
-  // the fileCorrection mutation), not just a hidden button), and
-  // reviewerId is what actually gets
-  // written onto a correction, always the signed-in user's own email,
-  // never a typed field.
+  // the fileCorrection/fileFlag mutations), not just a hidden button), and
+  // reviewerId/coordinatorId are what actually get written onto a
+  // correction/flag — always the signed-in user's own email (the same
+  // value, two prop names matching each form's own vocabulary), never a
+  // typed field.
   const { roles: myRoles } = useMyRoleGroups(partyClientId);
   const reviewerId = user?.signInDetails?.loginId;
+  const coordinatorId = user?.signInDetails?.loginId;
 
   return (
     <div className="dashboard">
@@ -91,7 +94,14 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
         <CoverageView server={server} partyClientId={partyClientId} stateCode={stateCode} refreshToken={refreshToken} />
       )}
       {activeTab === 'evidence' && (
-        <EvidenceView server={server} partyClientId={partyClientId} stateCode={stateCode} refreshToken={refreshToken} />
+        <EvidenceView
+          server={server}
+          partyClientId={partyClientId}
+          stateCode={stateCode}
+          refreshToken={refreshToken}
+          coordinatorId={coordinatorId}
+          myRoles={myRoles}
+        />
       )}
       {activeTab === 'discrepancies' && (
         <DiscrepancyQueue
@@ -100,6 +110,7 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
           stateCode={stateCode}
           refreshToken={refreshToken}
           reviewerId={reviewerId}
+          coordinatorId={coordinatorId}
           myRoles={myRoles}
         />
       )}
