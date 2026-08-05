@@ -69,7 +69,20 @@ function EvidenceRow({ server, submission, coordinatorId, myRoles, onFlagged }) 
   );
 }
 
-export default function EvidenceView({ server, partyClientId, stateCode, refreshToken, coordinatorId, myRoles }) {
+// assignedWards (from useMyAssignments.js, PartyDashboard.jsx) narrows
+// what a Coordinator SEES here to "their LGA/ward" (CLAUDE.md) —
+// client-side filtering on data already readable via
+// groupDefinedIn('partyClientId'), not an access-control boundary itself.
+// Fail-open (show everything) when assignedWards is empty: a Coordinator
+// with zero ward assignments is unrestricted, same rollout reasoning as
+// FieldAgent's server-side PU check in create-role-checked-record/
+// handler.ts (see amplify/data/resource.ts's AgentAssignment comment).
+function filterByAssignedWards(submissions, assignedWards) {
+  if (!assignedWards || assignedWards.length === 0) return submissions;
+  return submissions.filter((s) => assignedWards.includes(s.payload.wardCode));
+}
+
+export default function EvidenceView({ server, partyClientId, stateCode, refreshToken, coordinatorId, myRoles, assignedWards }) {
   const [submissions, setSubmissions] = useState([]);
   const [error, setError] = useState(null);
   const [localRefresh, setLocalRefresh] = useState(0);
@@ -90,15 +103,17 @@ export default function EvidenceView({ server, partyClientId, stateCode, refresh
     };
   }, [server, partyClientId, stateCode, refreshToken, localRefresh]);
 
+  const visibleSubmissions = filterByAssignedWards(submissions, assignedWards);
+
   return (
     <section className="dashboard-view evidence-view">
       <h3>Evidence</h3>
       {error && <p className="hint warn">Couldn't load submissions: {error}</p>}
-      {submissions.length === 0 && !error && (
+      {visibleSubmissions.length === 0 && !error && (
         <p className="hint">No submissions yet for this party client.</p>
       )}
       <ul className="evidence-list">
-        {submissions.map((s) => (
+        {visibleSubmissions.map((s) => (
           <EvidenceRow
             key={s.id}
             server={server}

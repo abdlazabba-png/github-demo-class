@@ -123,14 +123,6 @@ Practical consequences:
   Minor hygiene issue flagged during the security review — a crash
   mid-run currently leaves synthetic test records in the real table
   instead of guaranteeing cleanup.
-- [ ] **Per-agent PU assignment / per-coordinator LGA-ward assignment.** The
-  role matrix scopes FieldAgent to "assigned PU(s) only" and Coordinator to
-  "their LGA/ward" — narrower than what's enforced today. No data model
-  exists for per-agent PU assignment or per-coordinator LGA/ward
-  assignment; every role gets tenant-wide read within their party client.
-  Building the assignment model is a real feature, not a quick fix — it
-  needs its own admin UI (who assigns agents to PUs, and where) before the
-  access-control side is even worth tightening.
 - [ ] **`REVIEWER_CORRECTION_FLOW_SPEC.md` is stale.** Its data-model
   section still describes a `Correction` type (`correctedFields`,
   `originalSnapshot`, `flagType`) that was never built — the real,
@@ -245,7 +237,52 @@ one flag correctly surfaces in the discrepancy queue, flag entries appear
 in the audit log) and through the actual browser UI signed in as
 Coordinator (filed a flag via the real "Flag Issue" button) and Reviewer
 (confirmed the flag history renders but no "Flag Issue" button appears for
-a non-Coordinator role). Not yet committed/pushed/deployed to production.
+a non-Coordinator role). Committed, pushed, and verified live on production
+the same day (fresh test accounts confirmed FieldAgent-cannot/Coordinator-can
+against the real production API, then deleted).
+
+**The roster/assignment flow (2026-08-05).** The last unenforced half of
+CLAUDE.md's role matrix: FieldAgent's "assigned PU(s) only" and
+Coordinator's "their LGA/ward" scopes. New `AgentAssignment` model — one
+row per (agent, scope) pair, not an array field, so adding one assignment
+is a single create — plus a `createAssignment` mutation for PartyAdmin's
+new "Roster" tab (`RosterView.jsx`, PartyAdmin-only, reusing the same
+per-state LGA/ward/PU cascading picker `CaptureForm.jsx` already uses).
+Keyed by Cognito `sub`, not email — the access token backing this API has
+no email claim at all (confirmed live, same discovery as the Coordinator
+flow's identity work), so `createAssignment` resolves a PartyAdmin's
+typed email to a real user server-side (Cognito `ListUsers`) and
+independently re-verifies that user's actual party + role group
+membership (`AdminListGroupsForUser`) before writing anything — it can't
+be tricked into assigning someone outside the party or into a role
+they're not really in.
+
+**Deliberate rollout choice, not an oversight**: enforcement is
+fail-**open** when an agent has zero assignment rows (unrestricted, same
+as before this model existed) and only becomes fail-**closed** once at
+least one assignment exists for them — every pre-existing FieldAgent/
+Coordinator account had zero rows, so making this fail-closed immediately
+would have silently locked all of them out with no roster UI having ever
+existed to unlock them again. FieldAgent's PU check is real server-side
+enforcement (`fileSubmission` in `create-role-checked-record/handler.ts`);
+Coordinator's ward scope is client-side filtering in
+`EvidenceView.jsx`/`DiscrepancyQueue.jsx` (their tenant data is already
+readable via `groupDefinedIn('partyClientId')` regardless — this narrows
+what's *shown*, matching how the matrix's read-scoping was always a
+UX/focus concern rather than a confidentiality boundary here).
+
+Verified against the real sandbox API (8/8 scripted checks covering the
+full fail-open→fail-closed transition: a FieldAgent with zero assignments
+can submit anywhere; `createAssignment` rejects a non-PartyAdmin caller,
+an email outside the party, and an email in the party but the wrong role;
+a valid assignment is created and reads back correctly; the SAME
+FieldAgent can then submit for their assigned PU but is rejected for any
+other PU) and through the actual browser UI: filed a real Coordinator
+assignment via the Roster tab's form, then signed in as that Coordinator
+and confirmed Evidence/Discrepancies showed only submissions from their
+assigned ward — PUs from a different ward, visible moments earlier as
+PartyAdmin, were correctly absent. Not yet committed/pushed/deployed to
+production.
 
 **VerifiVote branding / PWA installability (2026-08-04).** The manifest's
 `icons: []` placeholder (present since installability was first added to

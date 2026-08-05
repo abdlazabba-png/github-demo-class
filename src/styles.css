@@ -528,6 +528,28 @@ td {
   color: var(--accent);
 }
 
+.roster-form {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.roster-form label {
+  flex: 1;
+  min-width: 160px;
+}
+.roster-form button {
+  height: fit-content;
+}
+
+.roster-table {
+  margin-top: 8px;
+}
+
 /* Coverage charts (src/ui/dashboard/CoverageCharts.jsx). Single sequential
    hue (--accent) throughout — magnitude/trend charts, not multi-series
    identity, so there's no categorical palette to validate. Track = a

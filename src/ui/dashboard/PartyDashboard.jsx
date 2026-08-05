@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { statesList } from '../../referenceData/states/index.js';
 import { useMyRoleGroups } from '../../auth/useMyRoleGroups.js';
+import { useMyAssignments } from '../../auth/useMyAssignments.js';
 import CoverageView from './CoverageView.jsx';
 import EvidenceView from './EvidenceView.jsx';
 import DiscrepancyQueue from './DiscrepancyQueue.jsx';
 import AuditLogView from './AuditLogView.jsx';
+import RosterView from './RosterView.jsx';
 
 const TABS = [
   { key: 'coverage', label: 'Coverage' },
   { key: 'evidence', label: 'Evidence' },
   { key: 'discrepancies', label: 'Discrepancies' },
   { key: 'audit', label: 'Audit Log' },
+  // Roster is appended conditionally below TABS, not listed here — it's
+  // PartyAdmin-only, unlike every other tab which every role can open.
 ];
 
 // server: src/sync/amplifyClient.js's exports (see App.jsx), which query
@@ -46,6 +50,17 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
   const reviewerId = user?.signInDetails?.loginId;
   const coordinatorId = user?.signInDetails?.loginId;
 
+  // The roster/assignment flow (CLAUDE.md: FieldAgent scoped to "assigned
+  // PU(s) only", Coordinator to "their LGA/ward"). assignedWards narrows
+  // what Evidence/Discrepancies SHOW a Coordinator — client-side only, see
+  // useMyAssignments.js's own comment for why that's not a security
+  // boundary (the real one is server-side, in fileSubmission's PU check).
+  // Fetched unconditionally rather than only when Coordinator role is
+  // present: cheap (one query, low-volume table) and avoids a hooks-order
+  // dependency on myRoles resolving first.
+  const { assignedWards } = useMyAssignments(server, partyClientId);
+  const tabs = myRoles.includes('PartyAdmin') ? [...TABS, { key: 'roster', label: 'Roster' }] : TABS;
+
   return (
     <div className="dashboard">
       <div className="dashboard-header">
@@ -78,7 +93,7 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
       </div>
 
       <nav className="dashboard-tabs">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
@@ -101,6 +116,7 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
           refreshToken={refreshToken}
           coordinatorId={coordinatorId}
           myRoles={myRoles}
+          assignedWards={assignedWards}
         />
       )}
       {activeTab === 'discrepancies' && (
@@ -112,10 +128,14 @@ export default function PartyDashboard({ server, refreshToken, myPartyClients, u
           reviewerId={reviewerId}
           coordinatorId={coordinatorId}
           myRoles={myRoles}
+          assignedWards={assignedWards}
         />
       )}
       {activeTab === 'audit' && (
         <AuditLogView server={server} partyClientId={partyClientId} stateCode={stateCode} refreshToken={refreshToken} />
+      )}
+      {activeTab === 'roster' && myRoles.includes('PartyAdmin') && (
+        <RosterView server={server} partyClientId={partyClientId} stateCode={stateCode} refreshToken={refreshToken} />
       )}
     </div>
   );

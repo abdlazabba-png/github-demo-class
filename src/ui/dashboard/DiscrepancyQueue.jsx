@@ -19,7 +19,23 @@ import FlagIssueForm from './FlagIssueForm.jsx';
 // Coordinator can still add another flag with more context for the
 // Reviewer, same append-only "never collapse, never replace" reasoning as
 // corrections.
-export default function DiscrepancyQueue({ server, partyClientId, stateCode, refreshToken, reviewerId, coordinatorId, myRoles }) {
+// Same client-side, fail-open-when-unassigned ward filter as
+// EvidenceView.jsx's — see that file's comment for the full reasoning.
+function filterByAssignedWards(discrepancies, assignedWards) {
+  if (!assignedWards || assignedWards.length === 0) return discrepancies;
+  return discrepancies.filter((d) => assignedWards.includes(d.payload.wardCode));
+}
+
+export default function DiscrepancyQueue({
+  server,
+  partyClientId,
+  stateCode,
+  refreshToken,
+  reviewerId,
+  coordinatorId,
+  myRoles,
+  assignedWards,
+}) {
   const [discrepancies, setDiscrepancies] = useState([]);
   const [error, setError] = useState(null);
   const [localRefresh, setLocalRefresh] = useState(0);
@@ -40,15 +56,17 @@ export default function DiscrepancyQueue({ server, partyClientId, stateCode, ref
     };
   }, [server, partyClientId, stateCode, refreshToken, localRefresh]);
 
+  const visibleDiscrepancies = filterByAssignedWards(discrepancies, assignedWards);
+
   return (
     <section className="dashboard-view discrepancy-queue">
       <h3>Discrepancy queue</h3>
       {error && <p className="hint warn">Couldn't load discrepancies: {error}</p>}
-      {discrepancies.length === 0 && !error && (
+      {visibleDiscrepancies.length === 0 && !error && (
         <p className="hint">No open discrepancies for this party client.</p>
       )}
       <ul className="discrepancy-list">
-        {discrepancies.map((d) => (
+        {visibleDiscrepancies.map((d) => (
           <li
             key={d.id}
             className={`discrepancy-item severity-${d.validation.overallSeverity}${

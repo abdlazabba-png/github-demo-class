@@ -213,14 +213,71 @@ const schema = a.schema({
       index('partyClientId').sortKeys(['stateCode']).queryField('listFlagsByPartyClientAndState'),
     ]),
 
-  // The only path left to create any of the three models above. `allow.authenticated()`
+  // The roster/assignment flow (CLAUDE.md's role matrix: FieldAgent is
+  // scoped to "assigned PU(s) only", Coordinator to "their LGA/ward";
+  // PartyAdmin can "manage agent roster & PU assignments"). Until now
+  // neither restriction was enforced — every FieldAgent could submit for
+  // any PU in the tenant, every Coordinator saw the whole tenant. This
+  // model is what an assignment actually IS: one row per (agent, scope)
+  // pair — a FieldAgent with 3 assigned PUs gets 3 rows, not an array
+  // field, so adding/removing one assignment is a single create, not a
+  // read-modify-write of a list.
+  //
+  // Keyed by userSub (the Cognito `sub` from the caller's verified access
+  // token, i.e. event.identity.sub in create-role-checked-record/handler.ts)
+  // — NOT email. This access-token identity has no email claim at all
+  // (confirmed live: a raw event dump during the Coordinator-flow work
+  // showed claims.token_use: "access" with sub/username/cognito:groups but
+  // no email), so email can never be trusted as "who the caller really
+  // is" the way sub can. userEmail below is denormalized display-only,
+  // resolved server-side by createAssignment (never trust a client's own
+  // claim about someone else's email either) so the roster view doesn't
+  // need N Cognito lookups to render a human-readable list.
+  //
+  // scopeValue is a puCode when role='FieldAgent', a wardCode when
+  // role='Coordinator' — no separate scopeLevel field, since the role
+  // alone determines which kind of code it is (matches "Their LGA/ward"
+  // at ward granularity; a Coordinator covering a whole LGA gets one row
+  // per ward in it, same "multiple rows over one array field" reasoning
+  // as PU assignment above).
+  //
+  // Deliberate rollout choice, not an oversight: enforcement (in
+  // fileSubmission below, and client-side in
+  // src/ui/dashboard/EvidenceView.jsx/DiscrepancyQueue.jsx for
+  // Coordinator's ward filter) is fail-OPEN when a user has zero
+  // assignment rows — unrestricted, exactly like before this model
+  // existed — and only becomes fail-closed once at least one assignment
+  // exists for them. Every existing FieldAgent/Coordinator account has
+  // zero rows today; making this fail-closed immediately would have
+  // silently locked every one of them out with no roster UI having ever
+  // existed to unlock them again.
+  AgentAssignment: a
+    .model({
+      partyClientId: a.string().required(), // denormalized: needed for the auth rule itself
+      userSub: a.string().required(),
+      userEmail: a.string().required(), // display-only, resolved server-side — never used for enforcement
+      role: a.string().required(), // 'FieldAgent' | 'Coordinator'
+      scopeValue: a.string().required(), // puCode (FieldAgent) or wardCode (Coordinator)
+    })
+    .authorization((allow) => [allow.groupDefinedIn('partyClientId').to(['read'])])
+    .secondaryIndexes((index) => [
+      // Doubles as both queries this app needs: the roster view's "every
+      // assignment for this party" (partition key alone, no sort
+      // condition) and create-role-checked-record's own "this specific
+      // caller's assignments" (partition key + userSub sort condition).
+      index('partyClientId').sortKeys(['userSub']).queryField('listAssignmentsByPartyClientAndUser'),
+    ]),
+
+  // The only path left to create any of the four models above. `allow.authenticated()`
   // is deliberately coarse (any signed-in user can attempt the call) —
   // create-role-checked-record/handler.ts is what actually checks the
   // caller's REAL Cognito group membership against
-  // `${partyClientId}__FieldAgent` before writing. Returns just the new
-  // id: amplifyClient.js's createSubmission() never reads the response,
-  // and a minimal return type avoids any risk of a non-null field
-  // mismatch on the way out.
+  // `${partyClientId}__FieldAgent` before writing — and now, if the caller
+  // has any AgentAssignment rows at all, that puCode must be one of them
+  // (fail-open with zero rows; see AgentAssignment's comment above for why).
+  // Returns just the new id: amplifyClient.js's createSubmission() never
+  // reads the response, and a minimal return type avoids any risk of a
+  // non-null field mismatch on the way out.
   fileSubmission: a
     .mutation()
     .arguments({
@@ -281,6 +338,25 @@ const schema = a.schema({
       note: a.string().required(),
     })
     .returns(a.ref('SubmissionFlag'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(createRoleCheckedRecord)),
+
+  // The roster flow's only path to create an assignment — see
+  // AgentAssignment's authorization comment above. Takes userEmail (what a
+  // PartyAdmin actually knows/types), not userSub: create-role-checked-record
+  // resolves the target's real sub via Cognito ListUsers server-side, and
+  // verifies that user is genuinely a member of this partyClientId's
+  // tenant group before writing anything — a PartyAdmin can't create a
+  // bogus assignment for an email outside their own party.
+  createAssignment: a
+    .mutation()
+    .arguments({
+      partyClientId: a.string().required(),
+      userEmail: a.string().required(),
+      role: a.string().required(), // 'FieldAgent' | 'Coordinator'
+      scopeValue: a.string().required(),
+    })
+    .returns(a.ref('AgentAssignment'))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(createRoleCheckedRecord)),
 });

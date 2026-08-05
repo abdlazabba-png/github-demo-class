@@ -240,6 +240,43 @@ export async function getFlagsForClient(partyClientId, stateCode) {
   return data.map(toFlagShape).sort((a, b) => a.createdAt - b.createdAt);
 }
 
+function toAssignmentShape(record) {
+  return {
+    id: record.id,
+    userSub: record.userSub,
+    userEmail: record.userEmail,
+    role: record.role,
+    scopeValue: record.scopeValue,
+    createdAt: record.createdAt ? new Date(record.createdAt).getTime() : Date.now(),
+  };
+}
+
+// The roster flow (CLAUDE.md: PartyAdmin can "manage agent roster & PU
+// assignments"). Takes userEmail, not a sub — see
+// amplify/data/resource.ts's AgentAssignment comment for why the actual
+// sub resolution and the real-group-membership re-check both happen
+// server-side in create-role-checked-record/handler.ts, never trusted
+// from this call.
+export async function createAssignment({ partyClientId, userEmail, role, scopeValue }) {
+  const result = await client.mutations.createAssignment({ partyClientId, userEmail, role, scopeValue });
+  if (result.errors?.length) {
+    throw new Error(result.errors.map((e) => e.message).join('; '));
+  }
+  return toAssignmentShape(result.data);
+}
+
+// No stateCode filter — an assignment's PU/ward code already implies its
+// state, and RosterView.jsx (the only caller) wants every assignment for
+// the whole party client at once, not scoped to whichever state happens
+// to be selected in the dashboard's state picker.
+export async function getAssignmentsForClient(partyClientId) {
+  const { data, errors } = await client.models.AgentAssignment.listAssignmentsByPartyClientAndUser({
+    partyClientId,
+  });
+  if (errors?.length) throw new Error(errors.map((e) => e.message).join('; '));
+  return data.map(toAssignmentShape).sort((a, b) => a.createdAt - b.createdAt);
+}
+
 // Shared merge point so no view reimplements the submission<->correction/
 // flag joins. Attaches, per submission: `corrections` (oldest -> newest),
 // `flags` (oldest -> newest), and `effectivePartyVotes` (the latest

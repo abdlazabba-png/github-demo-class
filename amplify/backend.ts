@@ -131,3 +131,41 @@ backend.createRoleCheckedRecord.addEnvironment('CORRECTION_TABLE_NAME', correcti
 const flagTable = backend.data.resources.tables['SubmissionFlag'];
 flagTable.grantWriteData(createRecordLambda);
 backend.createRoleCheckedRecord.addEnvironment('FLAG_TABLE_NAME', flagTable.tableName);
+
+// The roster/assignment flow's AgentAssignment table
+// (amplify/data/resource.ts) — same intra-stack pattern as the tables
+// above, but grantReadWriteData() (not just Write) since fileSubmission's
+// PU-assignment check reads this table too, not just createAssignment's
+// writes. Same index-ARN gap as validateSubmissionLambda's grant above
+// (grantReadWriteData doesn't cover secondary indexes' ARNs) — this
+// Lambda's PU-assignment lookup queries the
+// listAssignmentsByPartyClientAndUser GSI, so it needs the same explicit
+// dynamodb:Query grant.
+const assignmentTable = backend.data.resources.tables['AgentAssignment'];
+assignmentTable.grantReadWriteData(createRecordLambda);
+createRecordLambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['dynamodb:Query'],
+    resources: [`${assignmentTable.tableArn}/index/*`],
+  })
+);
+backend.createRoleCheckedRecord.addEnvironment('ASSIGNMENT_TABLE_NAME', assignmentTable.tableName);
+
+// createAssignment (roster flow) needs to resolve a PartyAdmin-supplied
+// email to a real Cognito user and verify that user's real group
+// membership before writing an assignment — see
+// amplify/data/resource.ts's AgentAssignment comment for why this can't
+// just trust client input the way most of this app's models get away
+// with. Safe to reference the UserPool's own ARN directly here, unlike
+// post-confirmation's wiring above: this is a genuine ONE-WAY reference
+// (this function reads auth's UserPool; nothing in the auth stack
+// references this function back), not the two-way trigger relationship
+// that forced post-confirmation onto the wildcard/pseudo-parameter
+// workaround.
+createRecordLambda.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['cognito-idp:ListUsers', 'cognito-idp:AdminListGroupsForUser'],
+    resources: [backend.auth.resources.userPool.userPoolArn],
+  })
+);
+backend.createRoleCheckedRecord.addEnvironment('USER_POOL_ID', backend.auth.resources.userPool.userPoolId);
