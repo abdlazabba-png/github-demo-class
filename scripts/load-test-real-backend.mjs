@@ -76,37 +76,59 @@ async function main() {
   const records = Array.from({ length: AGENT_COUNT }, (_, i) => buildRecord(i));
   const ourIds = new Set(records.map((r) => r.id));
 
-  const writeStart = performance.now();
-  await Promise.all(records.map((r) => docClient.send(new PutCommand({ TableName: tableName, Item: r }))));
-  const writeElapsedMs = performance.now() - writeStart;
-  console.log(`Writes completed in ${writeElapsedMs.toFixed(0)}ms.`);
-
-  const { Items: afterWrite } = await docClient.send(new ScanCommand({ TableName: tableName }));
-  const foundCount = (afterWrite || []).filter((item) => ourIds.has(item.id)).length;
-  console.log(`Data-loss check: ${foundCount}/${AGENT_COUNT} records present (should be exactly ${AGENT_COUNT}).\n`);
-
-  console.log('Polling for the validation Lambda to catch up via DynamoDB Streams...');
+  // Everything that can throw between the writes landing and cleanup runs
+  // inside this try, with cleanup in `finally`, so a scan/poll failure
+  // (or Ctrl-C) doesn't leave loadtest-* records sitting in the real
+  // Coverage/Evidence dashboard — cleanup used to only run on the happy
+  // path, with main().catch() at the bottom logging the error and exiting
+  // without ever reaching the delete step.
+  let foundCount = 0;
   let validatedCount = 0;
   let finalItems = [];
-  for (let attempt = 1; attempt <= 10; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const { Items } = await docClient.send(new ScanCommand({ TableName: tableName }));
-    finalItems = (Items || []).filter((item) => ourIds.has(item.id));
-    validatedCount = finalItems.filter((item) => item.validationSeverity).length;
-    console.log(`  after ${attempt * 2}s: ${validatedCount}/${AGENT_COUNT} validated`);
-    if (validatedCount === AGENT_COUNT) break;
-  }
+  try {
+    const writeStart = performance.now();
+    await Promise.all(records.map((r) => docClient.send(new PutCommand({ TableName: tableName, Item: r }))));
+    const writeElapsedMs = performance.now() - writeStart;
+    console.log(`Writes completed in ${writeElapsedMs.toFixed(0)}ms.`);
 
-  const severityCounts = {};
-  for (const item of finalItems) {
-    const sev = item.validationSeverity || 'unvalidated';
-    severityCounts[sev] = (severityCounts[sev] || 0) + 1;
-  }
-  console.log('\nSeverity breakdown:', severityCounts);
+    const { Items: afterWrite } = await docClient.send(new ScanCommand({ TableName: tableName }));
+    foundCount = (afterWrite || []).filter((item) => ourIds.has(item.id)).length;
+    console.log(`Data-loss check: ${foundCount}/${AGENT_COUNT} records present (should be exactly ${AGENT_COUNT}).\n`);
 
-  console.log('\nCleaning up test records...');
-  await Promise.all(records.map((r) => docClient.send(new DeleteCommand({ TableName: tableName, Key: { id: r.id } }))));
-  console.log('Cleanup done.');
+    console.log('Polling for the validation Lambda to catch up via DynamoDB Streams...');
+    for (let attempt = 1; attempt <= 10; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const { Items } = await docClient.send(new ScanCommand({ TableName: tableName }));
+      finalItems = (Items || []).filter((item) => ourIds.has(item.id));
+      validatedCount = finalItems.filter((item) => item.validationSeverity).length;
+      console.log(`  after ${attempt * 2}s: ${validatedCount}/${AGENT_COUNT} validated`);
+      if (validatedCount === AGENT_COUNT) break;
+    }
+
+    const severityCounts = {};
+    for (const item of finalItems) {
+      const sev = item.validationSeverity || 'unvalidated';
+      severityCounts[sev] = (severityCounts[sev] || 0) + 1;
+    }
+    console.log('\nSeverity breakdown:', severityCounts);
+  } finally {
+    console.log('\nCleaning up test records...');
+    // allSettled, not all: a partial write failure above shouldn't stop us
+    // from deleting whichever of the 25 records actually landed. Deleting
+    // a key that was never written is a harmless no-op in DynamoDB.
+    const results = await Promise.allSettled(
+      records.map((r) => docClient.send(new DeleteCommand({ TableName: tableName, Key: { id: r.id } })))
+    );
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) {
+      console.error(
+        `WARNING: ${failed.length}/${records.length} test records failed to delete — clean up manually (table: ${tableName}):`,
+        failed.map((r) => r.reason?.message || r.reason)
+      );
+    } else {
+      console.log('Cleanup done.');
+    }
+  }
 
   const ok = foundCount === AGENT_COUNT && validatedCount === AGENT_COUNT;
   console.log(`\n${ok ? 'PASS' : 'FAIL'}: real backend handled ${AGENT_COUNT} concurrent writes with zero data loss${ok ? ' and the validation Lambda kept up.' : '.'}`);

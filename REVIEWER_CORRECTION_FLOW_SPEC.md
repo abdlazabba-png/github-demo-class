@@ -1,5 +1,12 @@
 # Reviewer Correction Flow — Build Spec for Claude Code
 
+**Status: implemented and deployed.** The "Data model" section below is the
+original build spec, kept for the design rationale, but it does not match
+what actually shipped — see the "As-built" callout right after it for the
+real `SubmissionCorrection` model (`amplify/data/resource.ts`). Everything
+from "Access control" onward is accurate as written and still describes the
+real, deployed behavior; only the data-model section was ever stale.
+
 Paste this file's content (or reference it) into a Claude Code session in the
 VerifiVote project. It assumes CLAUDE.md and the existing auth/data model are
 already in context.
@@ -58,6 +65,42 @@ Correction {
   corrected. Compute this at read time — don't denormalize it onto the
   Submission record itself, or you reintroduce the "silently editable"
   problem this flow exists to prevent.
+
+### As-built: the real `SubmissionCorrection` model
+
+The generic `Correction` sketched above was never built. What shipped is
+narrower and specific to the one thing "a data-entry error" actually means
+here — vote figures, not PU/ward/LGA or photo/GPS (correcting those would
+break `puCode`-indexed duplicate detection and isn't what this flow is for):
+
+```
+SubmissionCorrection {
+  id                     // auto
+  submissionId           // links to the original, unchanged Submission
+  partyClientId          // denormalized — needed for the auth rule itself
+  stateCode              // denormalized — needed for the secondary index
+  puCode                 // denormalized — avoids a cross-table read in the
+                          // validation Lambda
+  reviewerId              // signed-in user's email, set by the client from
+                          // the auth session — never a typed field
+  reviewerNote             // required, non-empty (server-enforced — see
+                          // Access control below); this spec's `reason`
+  previousPartyVotes        // the affected field's value before correction —
+                          // this spec's `originalSnapshot`, narrowed to
+                          // partyVotes only
+  correctedPartyVotes        // the corrected value — this spec's
+                          // `correctedFields`, narrowed to partyVotes only
+  validationSeverity          // server-populated by the same validation
+                          // Lambda that validates Submissions
+  validationChecks             // server-populated
+  createdAt / updatedAt          // standard Amplify model fields
+}
+```
+
+There is no `flagType` field — a correction doesn't record which flag (if
+any) prompted it; the Evidence/Discrepancy views already show a
+submission's flags and corrections side by side, so that link is visible
+without denormalizing it onto the correction record itself.
 
 ## Access control
 

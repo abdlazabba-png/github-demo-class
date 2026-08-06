@@ -88,10 +88,10 @@ data collection can proceed at all for a real election.
 - **MFA for dashboard accounts** — currently `mfa_configuration: "NONE"`.
   Worth enabling at least for Reviewer/PartyAdmin roles given what those
   accounts can see.
-- **Rewrite `REVIEWER_CORRECTION_FLOW_SPEC.md`'s stale data-model section**
-  — describes a `Correction` type that was never built; the real
-  `SubmissionCorrection` model is narrower (`partyVotes` only). Access
-  control and UI sections are accurate; only that one section is wrong.
+- ~~**Rewrite `REVIEWER_CORRECTION_FLOW_SPEC.md`'s stale data-model
+  section**~~ — done (2026-08-06): added an "As-built" callout documenting
+  the real `SubmissionCorrection` shape alongside the original sketch,
+  rather than deleting the design rationale.
 
 ## Lower priority — real but not urgent
 
@@ -100,7 +100,13 @@ data collection can proceed at all for a real election.
 - Load full North-East reference data (Bauchi, Borno, Taraba, Yobe) —
   blocked on #5 above regardless.
 - Enable DynamoDB point-in-time recovery / S3 versioning.
-- Wrap `scripts/load-test-real-backend.mjs`'s cleanup in try/finally.
+- ~~Wrap `scripts/load-test-real-backend.mjs`'s cleanup in try/finally.~~ —
+  done (2026-08-06). **Found in passing, not fixed (separate from what was
+  asked)**: the script also can't currently run at all against this AWS
+  account — `findSubmissionTableName()` expects exactly one `Submission-*`
+  table but two exist (sandbox and production both deployed in the same
+  account/region). Needs a way to pick the right one (e.g. an env var or
+  CLI flag), not just erroring out.
 
 ## Operational (not engineering) — running in parallel
 
