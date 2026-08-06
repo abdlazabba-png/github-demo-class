@@ -80,12 +80,6 @@ Practical consequences:
 - [ ] **Revisit the $20/month AWS budget** before real use — that threshold
   was set for this dev/test phase. CLAUDE.md's own estimate is "tens of
   dollars per state per election cycle" for real usage.
-- [ ] **Test installability on a real low-end Android device.** CLAUDE.md's
-  installability requirement explicitly calls for this — "simulated and
-  real conditions" can differ, especially for maskable-icon rendering and
-  the install-prompt UX. The manifest/icons (2026-08-04, see below) have
-  only been verified in a desktop browser and via direct HTTP checks
-  against the deployed manifest/icon files — never on an actual phone.
 
 ## Product/design decisions — need your call, not just code
 
@@ -342,6 +336,24 @@ byte-identical to before the split, so the installability work above is
 undisturbed. `npm run amplify:typecheck` clean, `npm test` 59/59. Not yet
 committed, pushed, or deployed.
 
+**Real-device installability test (2026-08-06).** CLAUDE.md's
+installability requirement explicitly calls for testing "on a real
+low-end Android device... not just in desktop browser dev tools," since
+install-prompt UX and maskable-icon rendering can differ from simulated
+conditions — this had only been verified via desktop browser and direct
+HTTP checks against the deployed manifest/icons until now (see the
+branding entry below). Tested against production
+(`https://master.d2hi4aeusdt3q3.amplifyapp.com`) on a real low-end Android
+phone in Chrome: install prompt appeared, home-screen icon rendered
+correctly (including Android's maskable-icon cropping), the installed app
+opens full-screen from the home-screen icon with no browser chrome,
+splash screen displays correctly, and offline capture works after signing
+in and then enabling airplane mode. Also confirmed the app-split's
+role-aware banner on real hardware, not just desktop: signing in with a
+non-FieldAgent account showed the "wrong app" banner and its link
+correctly opened the party dashboard (Demo Party Client Alpha), matching
+desktop/browser verification above.
+
 **VerifiVote branding / PWA installability (2026-08-04).** The manifest's
 `icons: []` placeholder (present since installability was first added to
 this checklist) is filled in — real icons at all standard sizes plus
@@ -349,8 +361,8 @@ maskable variants, app renamed from the placeholder "Election Result
 Verification Platform" / "ResultTracker" to "VerifiVote" in the manifest,
 apple-touch-icon and favicon `<link>` tags added to `index.html`. Verified
 in a desktop browser (icons load, no console errors) and via direct HTTP
-checks against the deployed manifest/icon files — **not yet on a real
-device**, see the Operational section above.
+checks against the deployed manifest/icon files, and since confirmed on a
+real low-end Android device too — see the real-device entry below.
 
 One live-testing gotcha worth remembering (from before the role-group
 work, may still apply to other custom Cognito attributes): after changing
