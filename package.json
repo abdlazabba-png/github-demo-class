@@ -5,8 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "dev:dashboard": "vite --config vite.dashboard.config.js",
+    "build:agent": "vite build",
+    "build:dashboard": "vite build --config vite.dashboard.config.js",
+    "build": "npm run build:agent && npm run build:dashboard",
     "preview": "vite preview",
+    "preview:dashboard": "vite preview --config vite.dashboard.config.js",
     "test": "node --test",
     "test:watch": "node --test --watch",
     "loadtest": "node scripts/simulate-load.js",

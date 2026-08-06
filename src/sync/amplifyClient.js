@@ -48,7 +48,7 @@ function localPhotoId(photoUrl) {
   return photoUrl.slice('local-photo://'.length);
 }
 
-// Called by SyncQueue's transport() at flush time (see App.jsx) — so it
+// Called by SyncQueue's transport() at flush time (see AgentApp.jsx) — so it
 // only ever runs when online, same as every other sync-time operation in
 // this app. Uploads the locally-queued photo blob to S3 first (if any),
 // then creates the Submission record referencing the resulting key.

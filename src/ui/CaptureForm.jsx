@@ -19,8 +19,9 @@ function emptyVotes() {
 
 // myPartyClients: the party clients the signed-in user's Cognito groups
 // actually grant access to (see src/auth/usePartyClientGroups.js) — never
-// a free choice. App.jsx only renders this component once that list is
-// non-empty.
+// a free choice. AgentApp.jsx only renders this component once that list
+// is non-empty (and the signed-in user is FieldAgent-role — see its own
+// "wrong app" banner).
 export default function CaptureForm({ onCapture, myPartyClients }) {
   const [agentId, setAgentId] = useState('agent-demo');
   const [partyClientId, setPartyClientId] = useState(myPartyClients[0].id);

@@ -17,9 +17,13 @@ const TABS = [
   // PartyAdmin-only, unlike every other tab which every role can open.
 ];
 
-// server: src/sync/amplifyClient.js's exports (see App.jsx), which query
-// AppSync directly. refreshToken bumps whenever the sync loop touches the
-// backend so these views know to re-fetch. myPartyClients: the party
+// server: src/sync/amplifyClient.js's exports (see DashboardApp.jsx),
+// which query AppSync directly. refreshToken is always 0 now that this
+// lives in its own entry bundle with no agent-side sync loop to bump it
+// (see DashboardApp.jsx's own comment) — kept as a prop rather than
+// removed since every view already takes it as a re-fetch dependency and
+// PartyDashboard's own actions (filing a correction/flag/assignment)
+// still trigger their own local refreshes independently. myPartyClients: the party
 // clients the signed-in user's Cognito groups actually grant access to
 // (src/auth/usePartyClientGroups.js) — never a free choice; AppSync itself
 // would reject a query for any other partyClientId regardless of what this

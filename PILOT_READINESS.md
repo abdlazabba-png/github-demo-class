@@ -281,8 +281,66 @@ other PU) and through the actual browser UI: filed a real Coordinator
 assignment via the Roster tab's form, then signed in as that Coordinator
 and confirmed Evidence/Discrepancies showed only submissions from their
 assigned ward — PUs from a different ward, visible moments earlier as
-PartyAdmin, were correctly absent. Not yet committed/pushed/deployed to
-production.
+PartyAdmin, were correctly absent. Committed (`396f110`), pushed, and
+verified live on production the same way as the Coordinator flow —
+fresh test accounts confirmed the same fail-open→fail-closed transition
+against the real production API, then were deleted.
+
+**Agent/dashboard app split (2026-08-06).** Two independent Vite builds
+instead of one bundle with a client-side view toggle — `AgentApp.jsx`
+(root `/`, keeps the manifest/service-worker/icons, PWA-installable) and
+`DashboardApp.jsx` (new `dashboard/index.html`, served at `/dashboard/`,
+no manifest link, no SW registration — it has no install requirement).
+`package.json`'s `build` script runs `build:agent` before `build:dashboard`
+because the agent build defaults to `emptyOutDir: true` and would wipe the
+dashboard's output if it ran second. A non-FieldAgent signed in at `/` now
+sees a role-aware "wrong app" banner with a link to `/dashboard/`, replacing
+the capture form entirely (same pattern as the existing "not assigned to a
+party client" message) — a Coordinator/Reviewer/PartyAdmin account can no
+longer land on a capture form that isn't meant for their role. Session
+carries over between the two bundles with no re-auth, since both are
+same-origin page loads.
+
+A real bug surfaced and fixed along the way, not just a clean first pass:
+`vite.dashboard.config.js` initially set `base: '/dashboard/'`, which broke
+its own assets — Vite always writes JS/CSS into a flat `<outDir>/assets/`
+regardless of which HTML entry emitted them (only the HTML file itself
+reproduces its input-relative path under `outDir`), so the built page
+requested `/dashboard/assets/index-*.js` against a file that actually lived
+at `/assets/index-*.js`, a 404 confirmed live via the network log before
+the fix. Removed `base` entirely; Vite's default emits root-relative asset
+references that resolve correctly from any path.
+
+The SW-scope risk this split raises — a service worker registered at `/`
+has scope `/` and can in principle intercept fetches for `/dashboard/` too,
+even though that page never registers its own SW — was verified as real
+(`navigator.serviceWorker.getRegistrations()` showed an active registration
+with scope `/`) and then verified closed: `vite.config.js`'s
+`navigateFallbackDenylist` was extended from `[/^\/api\//]` to
+`[/^\/api\//, /^\/dashboard\//]`, confirmed compiled into the actual
+`dist/sw.js` the browser runs (not just present in source config), and
+confirmed live against the production build (`vite preview`, not dev mode)
+that `/dashboard/` and its assets load `200 OK` and survive a reload
+without ever being served from the agent bundle's cache.
+
+Bundle-size effect is real but small, not "meaningful" in a way a user
+would notice: 889.74 kB → 860.25 kB raw (256.42 kB → 249.01 kB gzip), about
+3%. The shared `aws-amplify`/`@aws-amplify/ui-react` SDK (Auth, Data
+client, Storage, Authenticator UI) dominates both bundles' size far more
+than either Tesseract.js (agent-only, confirmed absent from the dashboard
+bundle by string search) or `PartyDashboard`'s own view components
+(dashboard-only) — if a bigger drop is wanted later, lazy-loading
+Tesseract.js itself is the lever that would actually move it, not the
+bundle split.
+
+Verified against the actual production build, not dev mode: `Reviewer`
+account at `/` → banner + working dashboard link, no capture form;
+`FieldAgent` account at `/` → full capture form, no banner; `/dashboard/`
+renders the full `PartyDashboard` UI with real data and zero console
+errors; `manifest.webmanifest` fetched directly and confirmed
+byte-identical to before the split, so the installability work above is
+undisturbed. `npm run amplify:typecheck` clean, `npm test` 59/59. Not yet
+committed, pushed, or deployed.
 
 **VerifiVote branding / PWA installability (2026-08-04).** The manifest's
 `icons: []` placeholder (present since installability was first added to

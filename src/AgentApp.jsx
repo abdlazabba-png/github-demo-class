@@ -2,28 +2,39 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { SyncQueue } from './sync/syncQueue.js';
 import * as amplifyServer from './sync/amplifyClient.js';
 import { useMyPartyClients } from './auth/usePartyClientGroups.js';
+import { useMyRoleGroups } from './auth/useMyRoleGroups.js';
 import CaptureForm from './ui/CaptureForm.jsx';
 import QueueStatus from './ui/QueueStatus.jsx';
-import PartyDashboard from './ui/dashboard/PartyDashboard.jsx';
 
-export default function App({ signOut, user }) {
+// The field-agent entry bundle (dashboard/index.html + DashboardApp.jsx is
+// the other one) — this used to be one combined App.jsx with an in-app
+// Field Agent / Party Dashboard toggle; the two are now genuinely separate
+// entry bundles (see vite.config.js / vite.dashboard.config.js) so this
+// bundle never ships PartyDashboard's code, CSS classes it needs, or —
+// critically — the dashboard's complete absence of an offline/install
+// requirement doesn't accidentally inherit this bundle's PWA/service
+// worker/OCR weight.
+export default function AgentApp({ signOut, user }) {
   const [records, setRecords] = useState([]);
   const [ready, setReady] = useState(false);
   const [simulateOffline, setSimulateOffline] = useState(false);
   const [browserOnline, setBrowserOnline] = useState(
     typeof navigator === 'undefined' ? true : navigator.onLine
   );
-  // In reality the field-agent app and the party dashboard are separate
-  // clients entirely (different devices, different auth). They're two tabs
-  // of one demo here purely so both are reachable without standing up a
-  // second app — real isolation comes from Cognito group membership
-  // (amplify/auth/resource.ts), not this toggle.
-  const [view, setView] = useState('agent');
-  // Bumped on every sync-loop touch so the dashboard's views (which read
-  // AppSync directly, not through React state) know to re-fetch.
+  // Bumped on every sync-loop touch — unused by anything in this bundle
+  // today (QueueStatus reads `records` directly), kept because
+  // amplifyServer.createSubmission's transport() call doesn't need it but
+  // a future agent-side view might; cheap to keep, not worth threading
+  // out only to re-add later.
   const [refreshToken, setRefreshToken] = useState(0);
 
   const { loading: groupsLoading, partyClients: myPartyClients } = useMyPartyClients();
+  // Role is party-scoped and every user belongs to exactly one party
+  // (CLAUDE.md's role matrix), so myPartyClients[0] is the only party a
+  // signed-in user could ever have a role in — same pattern
+  // PartyDashboard.jsx uses for its initial "Viewing as" selection.
+  const { roles: myRoles } = useMyRoleGroups(myPartyClients[0]?.id);
+  const isFieldAgent = myRoles.includes('FieldAgent');
 
   const effectiveOnline = browserOnline && !simulateOffline;
   const effectiveOnlineRef = useRef(effectiveOnline);
@@ -101,7 +112,7 @@ export default function App({ signOut, user }) {
       <header className="app-header">
         <div className="app-header-row">
           <div>
-            <h1>Election Result Verification — Phase 5</h1>
+            <h1>VerifiVote — Field Agent</h1>
             <p className="subtitle">
               Gombe/Adamawa pilot · offline-first capture · real AWS backend (AppSync/Cognito/S3)
             </p>
@@ -115,19 +126,6 @@ export default function App({ signOut, user }) {
         </div>
       </header>
 
-      <nav className="app-view-toggle">
-        <button type="button" className={view === 'agent' ? 'active' : ''} onClick={() => setView('agent')}>
-          Field Agent
-        </button>
-        <button
-          type="button"
-          className={view === 'dashboard' ? 'active' : ''}
-          onClick={() => setView('dashboard')}
-        >
-          Party Dashboard
-        </button>
-      </nav>
-
       {groupsLoading ? (
         <p>Checking your account's party-client membership…</p>
       ) : myPartyClients.length === 0 ? (
@@ -136,7 +134,26 @@ export default function App({ signOut, user }) {
           the matching Cognito group (see amplify/auth/resource.ts) before you can capture or view
           anything.
         </p>
-      ) : view === 'agent' ? (
+      ) : !isFieldAgent ? (
+        // Real enforcement is server-side regardless (fileSubmission's
+        // Lambda check rejects a non-FieldAgent's submission no matter
+        // what this bundle shows) — this is purely wayfinding: the two
+        // apps used to be one combined page with a toggle, so a
+        // Coordinator/Reviewer/PartyAdmin account bookmarking or
+        // installing the old combined URL would otherwise land on a form
+        // they can't use and get no explanation why.
+        <div className="wrong-app-banner">
+          <h2>This app is for field agents</h2>
+          <p>
+            Your account is signed in as {myRoles.join(', ') || 'a non-FieldAgent role'} for{' '}
+            {myPartyClients[0]?.name}. Result capture is only available to the FieldAgent role —
+            head to the party dashboard instead.
+          </p>
+          <a className="dashboard-link" href="/dashboard/">
+            Go to the dashboard →
+          </a>
+        </div>
+      ) : (
         <>
           <section className="network-panel">
             <div className="network-status">
@@ -164,13 +181,6 @@ export default function App({ signOut, user }) {
 
           <QueueStatus records={records} />
         </>
-      ) : (
-        <PartyDashboard
-          server={amplifyServer}
-          refreshToken={refreshToken}
-          myPartyClients={myPartyClients}
-          user={user}
-        />
       )}
     </div>
   );

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VerifiVote — Party Dashboard</title>
+    <!-- No manifest link, no apple-touch-icon, no service-worker
+         registration here on purpose — the dashboard bundle has no
+         offline/install requirement (see NEXT_STEPS_WORK_ORDER.md's app
+         split decision). Plain favicon only, reusing the same icon files
+         the agent bundle already deploys to /icons/ at the site root —
+         root-absolute paths resolve there regardless of this page living
+         under /dashboard/. -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/dashboard-main.jsx"></script>
+  </body>
+</html>

@@ -11,7 +11,17 @@ export default defineConfig({
         // Never cache the (future) sync API — only the app shell. Same
         // reasoning as usd-frontline's service-worker.js: caching live
         // submission/result endpoints would serve stale data.
-        navigateFallbackDenylist: [/^\/api\//],
+        //
+        // /dashboard/ added for the app split (NEXT_STEPS_WORK_ORDER.md):
+        // this service worker is registered at scope '/' (the default for
+        // a SW at the site root), which by itself would let it intercept
+        // /dashboard/... requests too, even though the dashboard bundle
+        // never registers a SW of its own. The dashboard has no
+        // offline/install requirement at all, so this denylist entry is
+        // what actually keeps this SW from serving (or caching) any part
+        // of it. Verified live in the browser, not just asserted here —
+        // see PILOT_READINESS.md's app-split entry.
+        navigateFallbackDenylist: [/^\/api\//, /^\/dashboard\//],
         // Defaults only cover a handful of extensions and cap files at
         // 2MiB — too small for the self-hosted OCR assets (WASM core +
         // gzipped traineddata), which is the whole point of bundling them:
