@@ -124,3 +124,10 @@ Role groups (`FieldAgent`, `Coordinator`, `Reviewer`, `PartyAdmin`) are
 distinct from tenant/party groups (`party-demo-alpha`, etc.) and must both
 be checked together in every access rule. A user with `Reviewer` +
 `party-demo-alpha` can correct submissions only within `party-demo-alpha`.
+
+Correction approval is single-actor for the pilot phase — one Reviewer
+files a reasoned, logged correction, which itself satisfies "the logged
+reviewer flow." A two-actor propose/approve model (independent
+corroboration before a correction takes effect) is planned before real
+commercial/multi-party use, not yet built. This is a deliberate
+sequencing choice, not a gap.
